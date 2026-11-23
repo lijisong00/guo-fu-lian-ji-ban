@@ -159,6 +159,41 @@
 <div id="toast"></div>
 <div id="deadTag" class="hidden">你被打倒了…… 5 秒后原地复活</div>
 
+<script>
+/* 启动报错自显：任何脚本错误都写到唤醒屏上，不再静默转圈 */
+window.__bootFailed = false;
+window.__showBootErr = function(msg){
+  var w = document.getElementById('wake');
+  if(w) w.classList.remove('hidden');
+  var m = document.getElementById('wakeMsg');
+  if(m) m.textContent = msg;
+  var s = document.getElementById('wakeSpin');
+  if(s) s.style.display = 'none';
+  var r = document.getElementById('wakeRetry');
+  if(r) r.classList.remove('hidden');
+};
+window.addEventListener('error', function(e){
+  var w = document.getElementById('wake');
+  if(w && w.classList.contains('hidden')) return;
+  window.__bootFailed = true;
+  var msg = (e && e.message) || '未知脚本错误';
+  var where = '';
+  if(e && e.filename) where = e.filename.split('/').pop();
+  if(e && e.lineno) where += ':' + e.lineno;
+  window.__showBootErr('启动失败：' + msg + (where ? '（' + where + '）' : '') + '，请截图发给红球。');
+});
+window.addEventListener('unhandledrejection', function(e){
+  var w = document.getElementById('wake');
+  if(w && w.classList.contains('hidden')) return;
+  window.__bootFailed = true;
+  var r = (e && e.reason) || {};
+  window.__showBootErr('启动失败：' + (r.message || r || '请求出错') + '，请截图发给红球。');
+});
+document.getElementById('wakeRetry').addEventListener('click', function(){
+  if(window.__bootFailed || typeof loadMenu !== 'function'){ location.reload(); }
+  else { loadMenu(); }
+});
+</script>
 <script src="data.js"></script>
 <script src="app.js"></script>
 </body>

@@ -11,6 +11,10 @@
    ============================================================ */
 
 var $ = function(id){ return document.getElementById(id); };
+/* 存储安全封装：个别内置浏览器禁用 localStorage 时也不让启动中断 */
+var __memStore = {};
+function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return (k in __memStore) ? __memStore[k] : null; } }
+function lsSet(k, v){ try{ localStorage.setItem(k, v); }catch(e){ __memStore[k] = String(v); } }
 var D = window.LegendData || {};
 var CLASSES = {};
 (D.CLASSES || []).forEach(function(c){ CLASSES[c.id] = c; });
@@ -39,15 +43,15 @@ var CLIENT_VERSION = 'v2-ported-2026-11-23';
 /* ---------------- 设备 ID：沿用旧客户端的存储 key，绝不能改 ---------------- */
 var DEVICE_KEY = 'lg_device_id';
 function getDeviceId(){
-  var id = localStorage.getItem(DEVICE_KEY);
+  var id = lsGet(DEVICE_KEY);
   if(!id){
     id = 'dev-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-    localStorage.setItem(DEVICE_KEY, id);
+    lsSet(DEVICE_KEY, id);
   }
   return id;
 }
 var deviceId = getDeviceId();
-var API_BASE = (localStorage.getItem('lg_api_base') || '').replace(/\/$/, '');
+var API_BASE = (lsGet('lg_api_base') || '').replace(/\/$/, '');
 var CHAR_KEY = 'lg_last_slot';
 var SKILLBAR_KEY = 'lg_skillbar_pos';
 
@@ -98,7 +102,7 @@ function potionTotal(v){
 
 /* ---------------- 音效：极简 WebAudio 合成，无外部音频 ---------------- */
 var AC = null;
-var soundOn = localStorage.getItem('lg_sound') !== 'off';
+var soundOn = lsGet('lg_sound') !== 'off';
 function tone(f0, f1, dur, type, vol){
   if(!soundOn) return;
   try{
@@ -606,7 +610,7 @@ function miniSpriteKey(m){
 var ME = null;             // 个人状态（{t:'me'}）
 var SNAP = null;           // 世界快照（{t:'snapshot'}）
 var ws = null, wsConnected = false, wsShouldBeOpen = false;
-var mySlot = Number(localStorage.getItem(CHAR_KEY) || '1') || 1;
+var mySlot = Number(lsGet(CHAR_KEY) || '1') || 1;
 var chars = [null, null, null, null, null];
 var claimUsed = false;
 var roomCode = null, roomMembers = [];
@@ -615,7 +619,7 @@ var selectedClass = 'mage';
 var shopData = null;
 var auctionListings = [], auctionClaims = [];
 var autoFight = false;
-var autoPot = localStorage.getItem('lg_autopot') === 'on';
+var autoPot = lsGet('lg_autopot') === 'on';
 var moveVec = { x: 0, y: 0 };
 var moveTarget = null;
 var keys = {};
@@ -661,10 +665,10 @@ async function fetchJson(path, opts, timeoutMs){
   } finally { clearTimeout(t); }
 }
 async function apiHealth(){
-  return fetchJson('/api/health', null, 65000);
+  return fetchJson('/api/health', null, 20000);
 }
 async function apiCharacters(){
-  return fetchJson('/api/characters?deviceId=' + encodeURIComponent(deviceId), null, 65000);
+  return fetchJson('/api/characters?deviceId=' + encodeURIComponent(deviceId), null, 20000);
 }
 async function apiCreateChar(slot, name, cls){
   return fetchJson('/api/character', {
@@ -874,7 +878,7 @@ function renderSlots(){
       }
       b.addEventListener('click', function(){
         mySlot = idx + 1;
-        localStorage.setItem(CHAR_KEY, String(mySlot));
+        lsSet(CHAR_KEY, String(mySlot));
         renderSlots(); updateSlotInfo(); sfx('click');
       });
       bar.appendChild(b);
@@ -937,8 +941,9 @@ async function loadMenu(){
   $('wakeRetry').classList.add('hidden');
   $('wakeMsg').textContent = '服务器唤醒中，请稍等……';
   var tries = 0;
-  while(tries < 3){
+  while(tries < 5){
     tries++;
+    $('wakeMsg').textContent = '正在连接服务器（第 ' + tries + ' 次）……';
     try{
       var h = await apiHealth();
       claimUsed = !!h.claimUsed;
@@ -1205,7 +1210,7 @@ canvas.addEventListener('pointerdown', function(e){
 (function(){
   var bar = $('bottomBar');
   var saved = null;
-  try{ saved = JSON.parse(localStorage.getItem(SKILLBAR_KEY) || 'null'); }catch(e){}
+  try{ saved = JSON.parse(lsGet(SKILLBAR_KEY) || 'null'); }catch(e){}
   if(saved && typeof saved.dx === 'number') bar.style.transform = 'translateX(' + saved.dx + 'px)';
   var drag = null;
   bar.addEventListener('pointerdown', function(e){
@@ -1222,7 +1227,7 @@ canvas.addEventListener('pointerdown', function(e){
     drag.dx = dx;
   });
   bar.addEventListener('pointerup', function(){
-    if(drag){ localStorage.setItem(SKILLBAR_KEY, JSON.stringify({ dx: drag.dx || 0 })); drag = null; }
+    if(drag){ lsSet(SKILLBAR_KEY, JSON.stringify({ dx: drag.dx || 0 })); drag = null; }
   });
 })();
 
@@ -1937,13 +1942,13 @@ wsSend({ t: 'auto', on:!ME.auto});
 });
 $('btnAutoPot').addEventListener('click', function(){
 autoPot =!autoPot;
-localStorage.setItem('lg_autopot', autoPot? 'on': 'off');
+lsSet('lg_autopot', autoPot? 'on': 'off');
 $('btnAutoPot').classList.toggle('on', autoPot);
 toast(autoPot? '自动喝药已开启': '自动喝药已关闭');
 });
 $('btnSound').addEventListener('click', function(){
 soundOn =!soundOn;
-localStorage.setItem('lg_sound', soundOn? 'on': 'off');
+lsSet('lg_sound', soundOn? 'on': 'off');
 $('btnSound').textContent = soundOn? '🔊 音效开': '🔇 音效关';
 if(soundOn) sfx('click');
 });
@@ -1995,11 +2000,19 @@ pendingRoom = { join: code};
 $('roomState').textContent = '已选：加入房间 ' + code + '。点「进入游戏」后自动进房。';
 sfx('click');
 });
-$('wakeRetry').addEventListener('click', loadMenu);
+/* wakeRetry 的点击处理在 index.html 内联脚本里（启动失败时刷新页面，否则重试连接），此处不再重复绑定 */
 if(!soundOn) $('btnSound').textContent = '🔇 音效关';
 $('btnAutoPot').classList.toggle('on', autoPot);
 
-buildClassCards();
-buildStageList();
+try{
+  buildClassCards();
+  buildStageList();
+}catch(e){
+  if(window.__showBootErr) window.__showBootErr('菜单初始化失败：' + e.message + '，请截图发给红球。');
+  else { var _m = $('wakeMsg'); if(_m) _m.textContent = '菜单初始化失败：' + e.message; }
+  var _s = $('wakeSpin'); if(_s) _s.style.display = 'none';
+  var _r = $('wakeRetry'); if(_r) _r.classList.remove('hidden');
+  throw e;
+}
 loadMenu();
 requestAnimationFrame(gameLoop);
