@@ -101,6 +101,14 @@ function serveStatic(req, res) {
 }
 
 // ---------------------------------------------------------------- 拍卖行服务（HTTP 与 WS 共用）
+// 在线玩家优先用内存里的存档（2026-11-23 移植冒烟发现）：DB 里的行最多
+// 落后 30 秒自动存盘，拍卖三处原本只读 DB——在线玩家刚买/刚打到的东西
+// 上架会报“背包里没有”，买东西扣的金币、领取的金币/物品还会在下次
+// 自动存盘时被内存里的旧存档覆盖丢掉。离线玩家（无内存对象）仍走 DB。
+function livePlayerFor(deviceId, slot) {
+  const p = game.playersByDevice.get(deviceId);
+  return p && p.slot === slot ? p : null;
+}
 function auctionPublic(l) {
   return {
     id: l.id, sellerName: l.sellerName, kind: l.kind, item: l.item,
@@ -111,7 +119,8 @@ function createAuctionListing(deviceId, slot, uid, bookId, price) {
   if (!Number.isInteger(price) || price <= 0 || price > 999999999) {
     return { ok: false, error: '价格不对（需为正整数金币）' };
   }
-  const ch = store.getCharacter(deviceId, slot);
+  const live = livePlayerFor(deviceId, slot);
+  const ch = live ? { data: live.save } : store.getCharacter(deviceId, slot);
   if (!ch || !ch.data) return { ok: false, error: '角色不存在' };
   const save = ch.data;
   if (uid !== undefined && uid !== null) {
@@ -119,6 +128,7 @@ function createAuctionListing(deviceId, slot, uid, bookId, price) {
     if (idx < 0) return { ok: false, error: '背包里没有这件装备（只能上架背包装备）' };
     const item = save.bag.splice(idx, 1)[0];
     store.saveCharacter(deviceId, slot, save);
+    if (live) live.meDirty = true;
     const listing = store.createListing(deviceId, save.name, slot, 'equip', item, price);
     backup.writeBackup(store, { force: true });
     return { ok: true, listing: auctionPublic(listing) };
@@ -129,6 +139,7 @@ function createAuctionListing(deviceId, slot, uid, bookId, price) {
     if (idx < 0) return { ok: false, error: '背包里没有这本技能书' };
     save.books.splice(idx, 1);
     store.saveCharacter(deviceId, slot, save);
+    if (live) live.meDirty = true;
     const sk = game.Data.SKILLS[nid];
     const item = { bookId: nid, name: sk.name, cls: sk.cls, req: sk.req };
     const listing = store.createListing(deviceId, save.name, slot, 'skillbook', item, price);
@@ -142,16 +153,19 @@ function buyAuctionListing(deviceId, slot, listingId) {
   if (!listing || listing.status !== 'active') return { ok: false, error: '物品已不在售' };
   if (listing.expiresAt <= Date.now()) return { ok: false, error: '物品已过期' };
   if (listing.sellerDeviceId === deviceId) return { ok: false, error: '不能买自己的物品' };
-  const ch = store.getCharacter(deviceId, slot);
+  const live = livePlayerFor(deviceId, slot);
+  const ch = live ? { data: live.save } : store.getCharacter(deviceId, slot);
   if (!ch || !ch.data) return { ok: false, error: '角色不存在' };
   if ((ch.data.gold || 0) < listing.price) return { ok: false, error: '金币不够' };
   ch.data.gold -= listing.price;
   store.saveCharacter(deviceId, slot, ch.data);
+  if (live) live.meDirty = true;
   const r = store.buyListingTx(listingId, deviceId, slot);
   if (!r.ok) {
     // 并发下被人先买走：退钱
     ch.data.gold += listing.price;
     store.saveCharacter(deviceId, slot, ch.data);
+    if (live) live.meDirty = true;
     return r;
   }
   backup.writeBackup(store, { force: true });
@@ -161,7 +175,8 @@ function claimAuctionClaim(deviceId, slot, claimId) {
   const claim = store.getClaim(claimId);
   if (!claim || claim.userDeviceId !== deviceId) return { ok: false, error: '待领取不存在' };
   if (claim.claimedAt) return { ok: false, error: '已经领取过了' };
-  const ch = store.getCharacter(deviceId, slot);
+  const live = livePlayerFor(deviceId, slot);
+  const ch = live ? { data: live.save } : store.getCharacter(deviceId, slot);
   if (!ch || !ch.data) return { ok: false, error: '角色不存在' };
   const save = ch.data;
   if (claim.kind === 'gold') {
@@ -179,6 +194,7 @@ function claimAuctionClaim(deviceId, slot, claimId) {
     }
   }
   store.saveCharacter(deviceId, slot, save);
+  if (live) live.meDirty = true;
   if (!store.markClaimClaimed(claimId)) return { ok: false, error: '领取失败（已被领走）' };
   backup.writeBackup(store, { force: true });
   return { ok: true };

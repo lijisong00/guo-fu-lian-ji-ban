@@ -20,232 +20,146 @@
 </div>
 
 <!-- 主菜单 -->
-<div id="menu" class="screen hidden">
-  <div class="menu-inner">
-    <div class="menu-title">热血传奇</div>
-    <div class="menu-ver">国服服务器版 · 独立联机版（v89 复刻 · 不用注册）</div>
-
-    <div class="slot-bar" id="slotBar"></div>
-
-    <div class="menu-card">
-      <h3>🗡️ 角色</h3>
-      <p id="slotInfo">请选择一个存档位。</p>
-      <div class="row">
-        <button id="btnNewChar" class="primary">＋ 新建角色</button>
-        <button id="btnDelChar" class="danger">删除当前位</button>
-      </div>
-      <p id="claimState" style="margin-top:10px"></p>
-      <div class="row">
-        <button id="btnClaim">🎁 认领我的三个角色</button>
-        <button id="btnRefreshSlots" class="ghost">↻ 刷新存档</button>
-      </div>
-    </div>
-
-    <div class="menu-card">
-      <h3>👥 联机房间（最多 4 人）</h3>
-      <p>不用注册：创建一个房间，把 5 位房间码发给朋友，朋友输码就能一起进图打怪。</p>
-      <div class="menu-actions">
-        <button id="btnCreateRoom" class="primary">创建房间</button>
-        <button id="btnJoinRoom">加入房间</button>
-      </div>
-      <div id="roomBox" class="hidden">
-        <div class="room-line">房间码（发给朋友）</div>
-        <div class="room-code" id="roomCode">-----</div>
-        <div class="room-line" id="roomMembers">房内 1 人</div>
-        <div class="row" style="margin-top:8px">
-          <button id="btnLeaveRoom" class="ghost">离开房间</button>
-          <button id="btnCopyCode" class="ghost">复制房间码</button>
-        </div>
-      </div>
-    </div>
-
-    <button id="btnEnter" class="primary">▶ 进入游戏</button>
-    <p style="text-align:center;font-size:12px;color:#9a8a68;margin-top:10px" id="menuFoot"></p>
-
-    <div class="menu-card">
-      <h3>🗺️ 地图（15 张 · 主线 14 + 隐藏 1）</h3>
-      <p>世界地图制，整图入口制。未知暗殿是隐藏图，不在传送列表里，只能从蜈蚣洞地牢一层东的连接通道走过去。</p>
-      <div class="stage-list" id="stageList"></div>
-    </div>
-  </div>
-</div>
-
-<!-- 游戏界面 -->
-<div id="game" class="hidden">
-  <canvas id="cv"></canvas>
-
-  <div id="hudTop">
-    <div id="bars">
-      <div class="bar-row"><span class="blab">血</span><div class="bar" id="hpBar"><i style="width:100%"></i></div><span class="bar-num" id="hpNum">--/--</span></div>
-      <div class="bar-row"><span class="blab">蓝</span><div class="bar" id="mpBar"><i style="width:100%"></i></div><span class="bar-num" id="mpNum">--/--</span></div>
-      <div class="bar-row"><span class="blab">经验</span><div class="bar" id="xpBar"><i style="width:0%"></i></div><span class="bar-num" id="xpNum">Lv --</span></div>
-      <div id="charInfo">—</div>
-      <div id="goldLine">💰 --　⚔️ 击杀 --　🗺️ <span id="stageName">比奇城</span> <span id="layerName"></span></div>
-    </div>
-    <div id="miniWrap">
-      <canvas id="minimap" width="236" height="176"></canvas>
-      <div id="miniHint">点开大地图</div>
-    </div>
-    <div id="hudBtns">
-      <button id="btnBag">🎒 背包</button>
-      <button id="btnSkills">📖 技能</button>
-      <button id="btnShop">🏪 商店</button>
-      <button id="btnAuction">⚖️ 拍卖行</button>
-      <button id="btnTeleport">🗺️ 传送</button>
-      <button id="btnMenu" class="ghost">☰ 菜单</button>
-    </div>
+<main id="menuScreen">
+  <div class="menuHero">
+    <span class="badge">国服服务器版 · 联机</span>
+    <h1>热血传奇 · 割草</h1>
+    <p class="sub">热血传奇 1.76 割草玩法：三职业、打怪爆装备和技能书、双技能同时释放。<br>
+    从比奇城出发，一张张图打通下去，最后一站赤月峡谷。建房后把 5 位房间码发给朋友，就能一起打。</p>
   </div>
 
-  <div id="log"></div>
+  <section class="menuCard">
+    <h2>存档位（最多 5 个）</h2>
+    <div class="slotBar" id="slotBar"></div>
+    <p class="note" id="slotInfo">请选择一个存档位。</p>
+  </section>
 
-  <div id="skillBar"></div>
-  <div id="shieldTag">🛡️ 魔法盾已开启</div>
+  <section class="menuCard" id="claimCard">
+    <h2>🎁 认领我的三个角色</h2>
+    <p class="note">第一次玩：输入一次性认领码，把之前在服务器版里的三个角色（法师 / 战士 / 道士）绑到这台设备上。认领码只能用一次。</p>
+    <div class="row">
+      <div class="grow"><input type="text" id="claimCode" maxlength="6" inputmode="numeric" placeholder="输入 6 位认领码"></div>
+      <button class="gold" id="btnClaim">认领</button>
+    </div>
+    <p class="note" id="claimState"></p>
+  </section>
 
-  <div id="joy"><div id="joyKnob"></div></div>
-  <div id="potRow">
-    <button id="btnHpPot">❤️ 红药 <b id="hpPotN">--</b></button>
-    <button id="btnMpPot">💙 蓝药 <span class="b2" id="mpPotN">--</span></button>
+  <section class="menuCard">
+    <h2>创建角色</h2>
+    <div class="row">
+      <div class="grow"><input type="text" id="charName" maxlength="12" placeholder="输入角色名（1–12 字）"></div>
+    </div>
+    <div class="clsGrid" id="clsGrid" style="margin-top:.9rem"></div>
+    <div class="row" style="margin-top:1rem">
+      <button class="gold" id="btnNewChar" style="font-size:1.05rem;padding:.65rem 2rem">＋ 在当前位新建角色</button>
+      <button class="danger" id="btnDelChar">删除当前位</button>
+      <button id="btnRefreshSlots">↻ 刷新存档</button>
+    </div>
+  </section>
+
+  <section class="menuCard">
+    <h2>👥 联机房间（最多 4 人）</h2>
+    <p class="note">不用注册：创建一个房间，把 5 位房间码发给朋友，朋友输码就能一起进图打怪。一个人玩也可以直接进，会自动给你开个单人房。</p>
+    <div class="row">
+      <button id="btnCreateRoom" class="primary">创建房间</button>
+      <button id="btnJoinRoom">加入房间</button>
+      <div class="grow"><input type="text" id="joinCode" maxlength="5" placeholder="朋友的 5 位房间码" style="text-transform:uppercase"></div>
+    </div>
+    <p class="note" id="roomState">还没选房间：直接进游戏会自动建单人房。</p>
+  </section>
+
+  <div class="row" style="margin-top:1.1rem">
+    <button class="gold" id="btnEnter" style="font-size:1.15rem;padding:.75rem 2.4rem">▶ 进入游戏</button>
   </div>
-  <div id="autoRow">
-    <button id="btnAutoFight">⚔️ 自动战斗</button>
-    <button id="btnAutoPot">🧪 自动喝药</button>
-  </div>
-  <div id="actBtns">
-    <div class="row2"><button class="abtn" id="btnPickup">拾取</button></div>
-    <div class="row2"><button class="abtn big" id="btnAttack">攻击</button></div>
-  </div>
+  <p style="text-align:center;font-size:12px;color:#9a8a68;margin-top:10px" id="menuFoot"></p>
 
-  <button id="enterHoleBtn" class="primary">🕳️ 进入尸王殿</button>
-  <button id="portalBtn">🕯️ 连接通道 → 未知暗殿</button>
+  <section class="menuCard">
+    <h2>🗺️ 地图（15 张 · 主线 14 + 隐藏 1）</h2>
+    <p class="note">世界地图制，整图入口制。未知暗殿是隐藏图，不在传送列表里，只能从蜈蚣洞地牢一层东的连接通道走过去。</p>
+    <div class="stage-list" id="stageList"></div>
+  </section>
 
-  <!-- 背包 -->
-  <div id="panelBag" class="panel hidden">
-    <h3>🎒 背包 <button data-close>✕ 关闭</button></h3>
-    <div class="hint">点装备可穿上 / 卸下；点技能书可学习（等级够了才能学）；异职业装备能穿但不计属性。死亡有 35% 概率掉 1 件已穿装备。</div>
-    <div class="grid9" id="equipGrid"></div>
-    <div class="hint" id="bagHint">背包 0/40</div>
-    <div class="bag-grid" id="bagGrid"></div>
-    <div class="item-actions" id="bagActions">
-      <button id="btnUseItem" class="primary">使用 / 穿上</button>
-      <button id="btnSellItem">出售</button>
-      <button id="btnUnequipItem">卸下</button>
+  <section class="menuCard">
+    <h2>玩法要点</h2>
+    <div class="featGrid">
+      <div><span>◆</span><b>双技能同放</b>：技能列表里选 2 门上场，两门各自按冷却同时释放、各自耗魔。</div>
+      <div><span>◆</span><b>技能书</b>：普通怪 1.4%、Boss 30% 掉书，全职业书池；等级够了在背包里点书学习。</div>
+      <div><span>◆</span><b>自动喝蓝</b>：蓝不够放技能时自动喝一瓶魔法药，回复 60% 魔法。</div>
+      <div><span>◆</span><b>怪物闪避</b>：普通怪 12%、Boss 28%；每点准确抵消 2% 闪避，最低留 2%。</div>
+      <div><span>◆</span><b>死亡惩罚</b>：死亡 35% 概率掉 1 件已穿装备，等级和技能保留，5 秒后原地复活。</div>
+      <div><span>◆</span><b>装备</b>：9 个穿戴位（手镯、戒指各左右两件），耐久统一 100，回城可维修；异职业装备能穿但不计属性。</div>
+      <div><span>◆</span><b>商店 / 拍卖行</b>：比奇城可买卖基础装备、买药、维修；拍卖行全服共享，背包装备和技能书都能自标价上架。</div>
+      <div><span>◆</span><b>隐藏地图</b>：未知暗殿不在传送列表里，入口在蜈蚣洞里的连接通道。</div>
+    </div>
+    <p class="note" style="margin-top:.8rem">操作：电脑用 WASD / 方向键移动，手机用左下角摇杆；走近怪物自动普攻，上场技能自动释放。点右上角小地图可看大地图。</p>
+  </section>
+</main>
+
+<!-- 游戏 -->
+<div id="gameScreen" class="hidden">
+  <div id="hud">
+    <div class="who">
+      <div class="nm" id="hudName">—</div>
+      <div class="meta" id="hudMeta">—</div>
+    </div>
+    <div class="barWrap">
+      <div class="barLabel"><span>生命</span><span id="hpText">0/0</span></div>
+      <div class="bar"><div id="hpFill"></div></div>
+      <div class="barLabel" style="margin-top:2px"><span>魔法</span><span id="mpText">0/0</span></div>
+      <div class="bar"><div id="mpFill"></div></div>
+      <div class="barLabel" style="margin-top:2px"><span>经验</span><span id="expText">0/0</span></div>
+      <div class="bar"><div id="expFill"></div></div>
+    </div>
+    <div class="nums" id="hudNums">—</div>
+    <div class="hudBtns">
+      <button id="bagBtn">背包</button>
+      <button id="skillBtn">技能</button>
+      <button id="shopBtn">商店</button>
+      <button id="auctionBtn">拍卖行</button>
+      <button id="teleBtn">传送</button>
+      <button id="darkBtn" class="hidden">🕯️ 连接通道</button>
+      <button id="menuBtn">主菜单</button>
     </div>
   </div>
-
-  <!-- 技能 -->
-  <div id="panelSkills" class="panel hidden">
-    <h3>📖 技能 <button data-close>✕ 关闭</button></h3>
-    <div class="hint">操作栏只放 2 门上场技能，两门各自按冷却同时释放。点「上场」切换；技能栏长按 0.42 秒可拖动位置。法师魔法盾习得后自动释放，不占栏位。技能书靠打怪掉落（Boss 30%、普通 1.4%），在背包里使用习得。</div>
-    <div class="skill-list" id="skillList"></div>
-  </div>
-
-  <!-- 商店 -->
-  <div id="panelShop" class="panel hidden">
-    <h3>🏪 商店 <button data-close>✕ 关闭</button></h3>
-    <div class="hint">只卖本职业基础装备（无极品属性）与药水。卖价 = 买价一半左右；维修全部已穿装备每件 30 金币。</div>
-    <div class="shop-tabs">
-      <button data-tab="equip" class="sel">⚔️ 装备</button>
-      <button data-tab="potion">🧪 药水</button>
-      <button data-tab="sell">💰 出售 / 维修</button>
+  <div id="stageWrap">
+    <canvas id="gameCanvas"></canvas>
+    <div id="mapNameTag">—</div>
+    <div id="roomTag" class="hidden">房间 <b id="roomTagCode">-----</b> · <span id="roomTagMembers">1 人</span></div>
+    <canvas id="minimap" width="264" height="198"></canvas>
+    <div id="logBox"></div>
+    <div id="joyBase"><div id="joyKnob"></div></div>
+    <div id="autoCol">
+      <button id="btnAutoFight">⚔️ 自动战斗</button>
+      <button id="btnAutoPot">🧪 自动喝药</button>
+      <button id="btnSound">🔊 音效开</button>
     </div>
-    <div id="shopBody"></div>
-  </div>
-
-  <!-- 拍卖行 -->
-  <div id="panelAuction" class="panel hidden">
-    <h3>⚖️ 拍卖行（全服共享） <button data-close>✕ 关闭</button></h3>
-    <div class="hint">背包里的装备和技能书可以自标金币价上架，无手续费，24 小时到期自动退回；成交金币全额归卖家。</div>
-    <div class="shop-tabs">
-      <button data-tab="list" class="sel">在售列表</button>
-      <button data-tab="mine">我要上架</button>
-      <button data-tab="claims">领取</button>
+    <div id="actBtns">
+      <button class="abtn" id="btnPickup">拾取</button>
+      <button class="abtn big" id="btnAttack">攻击</button>
     </div>
-    <div id="auctionBody"></div>
-  </div>
-
-  <!-- 传送 -->
-  <div id="panelTeleport" class="panel hidden">
-    <h3>🗺️ 传送员 <button data-close>✕ 关闭</button></h3>
-    <div class="hint">比奇城传送员可去各地图。✦ = 已点亮（打通僵尸洞穴点亮沃玛寺庙、打通沃玛寺庙点亮蜈蚣洞；打掉三层洞口爬出的黄衣僵尸同时点亮蜈蚣洞与沃玛寺庙）。未知暗殿不在列表里。</div>
-    <div class="tele-list" id="teleList"></div>
-  </div>
-
-  <!-- 大地图 -->
-  <div id="bigmap" class="hidden">
-    <h3>🗺️ <span id="bigmapTitle">比奇城</span> <button id="btnCloseBigmap">✕ 收起</button></h3>
-    <canvas id="bigmapCv"></canvas>
-    <div id="bigmapInfo">🔴 怪物　🟠 Boss　🟢 入口 / 出口　🟡 尸王殿洞口　金色「我」是你</div>
-  </div>
-</div>
-
-<!-- 新建角色 -->
-<div id="modalNew" class="modal hidden">
-  <div class="modal-box">
-    <h3>新建角色（<span id="newSlotNo">1</span> 号位）</h3>
-    <label>角色名</label>
-    <input id="newName" maxlength="12" placeholder="输入角色名">
-    <label>职业</label>
-    <div class="cls-pick" id="clsPick">
-      <button data-cls="war">🗡️ 战士</button>
-      <button data-cls="mage" class="sel">🔮 法师</button>
-      <button data-cls="tao">📿 道士</button>
-    </div>
-    <p class="hint" style="font-size:12px;color:#9a8a68" id="clsDesc">魔法爆发，血少，魔法盾习得后自动开盾。</p>
-    <div class="err" id="newErr"></div>
-    <div class="modal-btns">
-      <button id="btnDoCreate" class="primary">创建</button>
-      <button id="btnCancelCreate" class="ghost">取消</button>
+    <button id="enterHoleBtn" class="primary hidden">🕳️ 钻洞进尸王殿</button>
+    <button id="portalBtn" class="hidden">⬇️ 下一层</button>
+    <div id="bottomBar">
+      <div class="potBtn" id="hpPotBtn"><div class="cnt" id="hpPotCnt">0</div><div class="lb">红药 (1)</div></div>
+      <div class="skillSlot" id="slot0"><div class="sn">—</div><div class="lv">技能一</div><div class="cdbar"><div></div></div></div>
+      <div class="skillSlot" id="slot1"><div class="sn">—</div><div class="lv">技能二</div><div class="cdbar"><div></div></div></div>
+      <div class="potBtn" id="mpPotBtn"><div class="cnt" id="mpPotCnt">0</div><div class="lb">蓝药 (2)</div></div>
     </div>
   </div>
 </div>
 
-<!-- 认领 -->
-<div id="modalClaim" class="modal hidden">
-  <div class="modal-box">
-    <h3>🎁 认领我的三个角色</h3>
-    <p style="font-size:13px;color:#cbb98a;line-height:1.6">输入一次性认领码，把预置的三个角色绑定到这台设备：<br>
-    1 号 法师「慕尼黑好炸药」Lv11　2 号 战士「无名侠客」Lv2　3 号 道士「慕尼黑火焰」Lv9。<br>
-    认领码只能用一次，用过即失效；换设备需要重新认领（码已失效请勿重复输入）。</p>
-    <label>认领码（6 位数字）</label>
-    <input id="claimCode" maxlength="6" inputmode="numeric" placeholder="例如 123456">
-    <div class="err" id="claimErr"></div>
-    <div class="ok" id="claimOk"></div>
-    <div class="modal-btns">
-      <button id="btnDoClaim" class="primary">认领</button>
-      <button id="btnCancelClaim" class="ghost">取消</button>
-    </div>
+<!-- 面板容器 -->
+<div id="panelRoot"></div>
+<div id="bigMapOverlay" class="hidden">
+  <div>
+    <canvas id="bigMapCanvas" width="860" height="645"></canvas>
+    <p style="text-align:center;color:var(--dim);margin:.5rem 0 0">点任意处关闭 · 红点怪物 · 橙点 Boss · 金圈是你 · 黄圈是尸王殿洞口</p>
   </div>
 </div>
+<div id="toast"></div>
+<div id="deadTag" class="hidden">你被打倒了…… 5 秒后原地复活</div>
 
-<!-- 加入房间 -->
-<div id="modalJoin" class="modal hidden">
-  <div class="modal-box">
-    <h3>加入房间</h3>
-    <label>房间码（5 位）</label>
-    <input id="joinCode" maxlength="5" placeholder="朋友发你的 5 位房间码" style="text-transform:uppercase;letter-spacing:4px">
-    <div class="err" id="joinErr"></div>
-    <div class="modal-btns">
-      <button id="btnDoJoin" class="primary">进房</button>
-      <button id="btnCancelJoin" class="ghost">取消</button>
-    </div>
-  </div>
-</div>
-
-<!-- 上架 -->
-<div id="modalList" class="modal hidden">
-  <div class="modal-box">
-    <h3>上架拍卖行</h3>
-    <p style="font-size:13px;color:#cbb98a" id="listItemName"></p>
-    <label>标价（金币）</label>
-    <input id="listPrice" type="number" min="1" placeholder="输入金币价">
-    <div class="err" id="listErr"></div>
-    <div class="modal-btns">
-      <button id="btnDoList" class="primary">确认上架</button>
-      <button id="btnCancelList" class="ghost">取消</button>
-    </div>
-  </div>
-</div>
-
+<script src="data.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

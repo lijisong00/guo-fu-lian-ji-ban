@@ -21,12 +21,12 @@
 
 - 第一次打开新版游戏，点「认领我的三个角色」，输入认领码：
 
-  **Render 服务环境变量 CLAIM_CODE 的值（部署时设置，见下文“部署到 Render 免费版”）**
+  **（认领码在 Render 环境变量 CLAIM_CODE 里，不写进仓库）**
 
 - 认领后三个角色绑定到你这个设备的 1–3 号位（要求这三位当时是空的）；**认领码只能用一次，认领后立即失效**。没认领的设备打开是空位，朋友新建自己的角色。
 - 拍卖行当前是空的，迁移后也是空的。
 
-> 部署后请尽快认领。认领码不写进公开仓库：在 Render 服务的 Environment 里设置环境变量 CLAIM_CODE（服务端启动时优先读环境变量），服务端代码与日志里不印这个码。
+> 部署后请尽快认领。认领码只写在这里与 `seed/claim-code.json`，服务端代码与日志里不印这个码。
 
 ## 这是什么版本（与现服务器版 v89 对齐）
 
@@ -62,9 +62,9 @@ node server.js   # 启动，默认 http://localhost:3000
 仓库里已有 `render.yaml`（web service、Node 环境、Free 套餐、启动命令 `node server.js`、健康检查 `/api/health`）。步骤：
 
 1. 把本项目推到 GitHub 仓库（例如 `lijisong00/guo-fu-lian-ji-ban`）。
-2. 打开 [render.com](https://render.com) 注册（建议用 GitHub 账号注册，不用信用卡，邮箱注册即可）→ New → Web Service → 选这个仓库 → Free 套餐 → 在 Environment 里添加环境变量 CLAIM_CODE（值是你的认领码）→ Deploy。
+2. 打开 [render.com](https://render.com) 注册（建议用 GitHub 账号注册，不用信用卡，邮箱注册即可）→ New → Web Service → 选这个仓库 → Free 套餐 → Deploy。
 3. 部署成功后把网址发给朋友，就能打开玩、建房、输 5 位房间码联机。
-4. 部署后尽快用认领码认领三个角色（认领码就是第 2 步里填进 CLAIM_CODE 的那个值）。
+4. 部署后尽快用认领码认领三个角色（码在 Render 环境变量 CLAIM_CODE 里，不写进仓库）。
 
 **免费版两点注意：**
 - **15 分钟没人玩会休眠**，下次打开要等 30–60 秒唤醒。客户端首个请求 65 秒超时、最多重试 2 次，期间显示“服务器唤醒中，请稍等……”，不是打不开。
@@ -93,9 +93,10 @@ guo-fu-lian-ji-ban/
 │   ├── db.js             # SQLite 存档层（characters / auction_listings / auction_claims / meta）
 │   ├── game.js           # 服务端权威游戏逻辑（战斗/掉落/拍卖/尸王殿/房间）
 │   └── backup.js         # 自动备份与启动恢复
-├── public/               # 客户端（index.html / app.js / style.css，零外部请求）
+├── public/               # 客户端 v2（移植版：index.html / app.js / style.css / data.js，零外部请求）
 ├── seed/
 │   ├── saves-export-20261123.json  # 服务器版实读存档导出（迁移源）
+│   └── claim-code.json             # 一次性认领码（不进仓库）
 ├── scripts/
 │   ├── migrate.mjs         # 迁移
 │   └── verify-migration.mjs  # 迁移校验（49 项）
