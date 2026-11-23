@@ -5,196 +5,152 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#14100c">
 <title>热血传奇 · 国服联机版</title>
-<link rel="stylesheet" href="style.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #171008; color: #e8dcc0;
+    font-family: "Songti SC", "STSong", "SimSun", serif; min-height: 100vh; }
+  body { display: flex; flex-direction: column; align-items: center; padding: 32px 20px 48px; }
+  .logo { color: #d4a437; font-size: 34px; font-weight: 900; letter-spacing: 4px; margin: 18px 0 4px; text-align: center; }
+  .sub { color: #a08d64; font-size: 15px; margin-bottom: 26px; text-align: center; }
+  .card { width: 100%; max-width: 420px; background: #241a0e; border: 1px solid #4a3517;
+    border-radius: 14px; padding: 18px; margin-bottom: 14px; }
+  .card h2 { margin: 0 0 10px; font-size: 17px; color: #d4a437; }
+  .card p { margin: 6px 0; font-size: 14px; line-height: 1.7; color: #c9b98f; }
+  .char { display: flex; justify-content: space-between; padding: 8px 2px;
+    border-bottom: 1px solid #3a2a12; font-size: 15px; }
+  .char:last-child { border-bottom: none; }
+  .char .empty { color: #8a7a58; }
+  .row { display: flex; gap: 8px; margin-top: 12px; }
+  input[type="text"] { flex: 1; min-width: 0; background: #171008; color: #e8dcc0;
+    border: 1px solid #4a3517; border-radius: 10px; padding: 11px 12px; font-size: 16px;
+    letter-spacing: 2px; outline: none; }
+  input[type="text"]:focus { border-color: #d4a437; }
+  button { border: none; border-radius: 10px; padding: 12px 18px; font-size: 16px;
+    font-weight: 700; cursor: pointer; background: #d4a437; color: #241a0e; }
+  button.secondary { background: #2e1e0c; color: #d4a437; border: 1px solid #4a3517; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button.big { width: 100%; max-width: 420px; padding: 15px; font-size: 18px; }
+  .msg { font-size: 14px; margin-top: 10px; min-height: 20px; }
+  .msg.err { color: #e07856; }
+  .msg.ok { color: #9ec97a; }
+  .foot { margin-top: 18px; font-size: 12px; color: #8a7a58; text-align: center; line-height: 1.8; }
+</style>
 </head>
 <body>
-
-<!-- 全屏唤醒 / 错误层 -->
-<div id="wake">
   <div class="logo">热血传奇</div>
   <div class="sub">国服服务器版 · 独立联机版</div>
-  <div class="spin" id="wakeSpin"></div>
-  <div id="wakeMsg">服务器唤醒中，请稍等……</div>
-  <div id="wakeTip">免费服务器 15 分钟没人玩会休眠，第一次打开需要 30–60 秒唤醒，请不要关闭页面。</div>
-  <button id="wakeRetry" class="hidden">重新连接</button>
-</div>
 
-<!-- 主菜单 -->
-<main id="menuScreen">
-  <div class="menuHero">
-    <span class="badge">国服服务器版 · 联机</span>
-    <h1>热血传奇 · 割草</h1>
-    <p class="sub">热血传奇 1.76 割草玩法：三职业、打怪爆装备和技能书、双技能同时释放。<br>
-    从比奇城出发，一张张图打通下去，最后一站赤月峡谷。建房后把 5 位房间码发给朋友，就能一起打。</p>
+  <div class="card">
+    <h2>我的角色</h2>
+    <div id="charList"><p>正在读取…</p></div>
   </div>
 
-  <section class="menuCard">
-    <h2>存档位（最多 5 个）</h2>
-    <div class="slotBar" id="slotBar"></div>
-    <p class="note" id="slotInfo">请选择一个存档位。</p>
-  </section>
-
-  <section class="menuCard" id="claimCard">
-    <h2>🎁 认领我的三个角色</h2>
-    <p class="note">第一次玩：输入一次性认领码，把之前在服务器版里的三个角色（法师 / 战士 / 道士）绑到这台设备上。认领码只能用一次。</p>
+  <div class="card" id="claimCard">
+    <h2>认领角色</h2>
+    <p>第一次进游戏：输入一次性认领码，把之前服务器版的三个角色领到这台设备上。认领过一次后码就失效了，不用再填。</p>
     <div class="row">
-      <div class="grow"><input type="text" id="claimCode" maxlength="6" inputmode="numeric" placeholder="输入 6 位认领码"></div>
-      <button class="gold" id="btnClaim">认领</button>
+      <input type="text" id="claimCode" placeholder="6 位认领码" maxlength="6" inputmode="numeric" autocomplete="off">
+      <button id="claimBtn">认领</button>
     </div>
-    <p class="note" id="claimState"></p>
-  </section>
-
-  <section class="menuCard">
-    <h2>创建角色</h2>
-    <div class="row">
-      <div class="grow"><input type="text" id="charName" maxlength="12" placeholder="输入角色名（1–12 字）"></div>
-    </div>
-    <div class="clsGrid" id="clsGrid" style="margin-top:.9rem"></div>
-    <div class="row" style="margin-top:1rem">
-      <button class="gold" id="btnNewChar" style="font-size:1.05rem;padding:.65rem 2rem">＋ 在当前位新建角色</button>
-      <button class="danger" id="btnDelChar">删除当前位</button>
-      <button id="btnRefreshSlots">↻ 刷新存档</button>
-    </div>
-  </section>
-
-  <section class="menuCard">
-    <h2>👥 联机房间（最多 4 人）</h2>
-    <p class="note">不用注册：创建一个房间，把 5 位房间码发给朋友，朋友输码就能一起进图打怪。一个人玩也可以直接进，会自动给你开个单人房。</p>
-    <div class="row">
-      <button id="btnCreateRoom" class="primary">创建房间</button>
-      <button id="btnJoinRoom">加入房间</button>
-      <div class="grow"><input type="text" id="joinCode" maxlength="5" placeholder="朋友的 5 位房间码" style="text-transform:uppercase"></div>
-    </div>
-    <p class="note" id="roomState">还没选房间：直接进游戏会自动建单人房。</p>
-  </section>
-
-  <div class="row" style="margin-top:1.1rem">
-    <button class="gold" id="btnEnter" style="font-size:1.15rem;padding:.75rem 2.4rem">▶ 进入游戏</button>
+    <div class="msg" id="claimMsg"></div>
   </div>
-  <p style="text-align:center;font-size:12px;color:#9a8a68;margin-top:10px" id="menuFoot"></p>
 
-  <section class="menuCard">
-    <h2>🗺️ 地图（15 张 · 主线 14 + 隐藏 1）</h2>
-    <p class="note">世界地图制，整图入口制。未知暗殿是隐藏图，不在传送列表里，只能从蜈蚣洞地牢一层东的连接通道走过去。</p>
-    <div class="stage-list" id="stageList"></div>
-  </section>
+  <button class="big" id="enterBtn">进入游戏</button>
 
-  <section class="menuCard">
-    <h2>玩法要点</h2>
-    <div class="featGrid">
-      <div><span>◆</span><b>双技能同放</b>：技能列表里选 2 门上场，两门各自按冷却同时释放、各自耗魔。</div>
-      <div><span>◆</span><b>技能书</b>：普通怪 1.4%、Boss 30% 掉书，全职业书池；等级够了在背包里点书学习。</div>
-      <div><span>◆</span><b>自动喝蓝</b>：蓝不够放技能时自动喝一瓶魔法药，回复 60% 魔法。</div>
-      <div><span>◆</span><b>怪物闪避</b>：普通怪 12%、Boss 28%；每点准确抵消 2% 闪避，最低留 2%。</div>
-      <div><span>◆</span><b>死亡惩罚</b>：死亡 35% 概率掉 1 件已穿装备，等级和技能保留，5 秒后原地复活。</div>
-      <div><span>◆</span><b>装备</b>：9 个穿戴位（手镯、戒指各左右两件），耐久统一 100，回城可维修；异职业装备能穿但不计属性。</div>
-      <div><span>◆</span><b>商店 / 拍卖行</b>：比奇城可买卖基础装备、买药、维修；拍卖行全服共享，背包装备和技能书都能自标价上架。</div>
-      <div><span>◆</span><b>隐藏地图</b>：未知暗殿不在传送列表里，入口在蜈蚣洞里的连接通道。</div>
-    </div>
-    <p class="note" style="margin-top:.8rem">操作：电脑用 WASD / 方向键移动，手机用左下角摇杆；走近怪物自动普攻，上场技能自动释放。点右上角小地图可看大地图。</p>
-  </section>
-</main>
-
-<!-- 游戏 -->
-<div id="gameScreen" class="hidden">
-  <div id="hud">
-    <div class="who">
-      <div class="nm" id="hudName">—</div>
-      <div class="meta" id="hudMeta">—</div>
-    </div>
-    <div class="barWrap">
-      <div class="barLabel"><span>生命</span><span id="hpText">0/0</span></div>
-      <div class="bar"><div id="hpFill"></div></div>
-      <div class="barLabel" style="margin-top:2px"><span>魔法</span><span id="mpText">0/0</span></div>
-      <div class="bar"><div id="mpFill"></div></div>
-      <div class="barLabel" style="margin-top:2px"><span>经验</span><span id="expText">0/0</span></div>
-      <div class="bar"><div id="expFill"></div></div>
-    </div>
-    <div class="nums" id="hudNums">—</div>
-    <div class="hudBtns">
-      <button id="bagBtn">背包</button>
-      <button id="skillBtn">技能</button>
-      <button id="shopBtn">商店</button>
-      <button id="auctionBtn">拍卖行</button>
-      <button id="teleBtn">传送</button>
-      <button id="darkBtn" class="hidden">🕯️ 连接通道</button>
-      <button id="menuBtn">主菜单</button>
-    </div>
+  <div class="foot">
+    免费服务器 15 分钟没人玩会休眠，第一次打开需要 30–60 秒唤醒，请不要关闭页面。<br>
+    建房后把 5 位房间码发给朋友，就能一起打。
   </div>
-  <div id="stageWrap">
-    <canvas id="gameCanvas"></canvas>
-    <div id="mapNameTag">—</div>
-    <div id="roomTag" class="hidden">房间 <b id="roomTagCode">-----</b> · <span id="roomTagMembers">1 人</span></div>
-    <canvas id="minimap" width="264" height="198"></canvas>
-    <div id="logBox"></div>
-    <div id="joyBase"><div id="joyKnob"></div></div>
-    <div id="autoCol">
-      <button id="btnAutoFight">⚔️ 自动战斗</button>
-      <button id="btnAutoPot">🧪 自动喝药</button>
-      <button id="btnSound">🔊 音效开</button>
-    </div>
-    <div id="actBtns">
-      <button class="abtn" id="btnPickup">拾取</button>
-      <button class="abtn big" id="btnAttack">攻击</button>
-    </div>
-    <button id="enterHoleBtn" class="primary hidden">🕳️ 钻洞进尸王殿</button>
-    <button id="portalBtn" class="hidden">⬇️ 下一层</button>
-    <div id="bottomBar">
-      <div class="potBtn" id="hpPotBtn"><div class="cnt" id="hpPotCnt">0</div><div class="lb">红药 (1)</div></div>
-      <div class="skillSlot" id="slot0"><div class="sn">—</div><div class="lv">技能一</div><div class="cdbar"><div></div></div></div>
-      <div class="skillSlot" id="slot1"><div class="sn">—</div><div class="lv">技能二</div><div class="cdbar"><div></div></div></div>
-      <div class="potBtn" id="mpPotBtn"><div class="cnt" id="mpPotCnt">0</div><div class="lb">蓝药 (2)</div></div>
-    </div>
-  </div>
-</div>
-
-<!-- 面板容器 -->
-<div id="panelRoot"></div>
-<div id="bigMapOverlay" class="hidden">
-  <div>
-    <canvas id="bigMapCanvas" width="860" height="645"></canvas>
-    <p style="text-align:center;color:var(--dim);margin:.5rem 0 0">点任意处关闭 · 红点怪物 · 橙点 Boss · 金圈是你 · 黄圈是尸王殿洞口</p>
-  </div>
-</div>
-<div id="toast"></div>
-<div id="deadTag" class="hidden">你被打倒了…… 5 秒后原地复活</div>
 
 <script>
-/* 启动报错自显：任何脚本错误都写到唤醒屏上，不再静默转圈 */
-window.__bootFailed = false;
-window.__showBootErr = function(msg){
-  var w = document.getElementById('wake');
-  if(w) w.classList.remove('hidden');
-  var m = document.getElementById('wakeMsg');
-  if(m) m.textContent = msg;
-  var s = document.getElementById('wakeSpin');
-  if(s) s.style.display = 'none';
-  var r = document.getElementById('wakeRetry');
-  if(r) r.classList.remove('hidden');
-};
-window.addEventListener('error', function(e){
-  var w = document.getElementById('wake');
-  if(w && w.classList.contains('hidden')) return;
-  window.__bootFailed = true;
-  var msg = (e && e.message) || '未知脚本错误';
-  var where = '';
-  if(e && e.filename) where = e.filename.split('/').pop();
-  if(e && e.lineno) where += ':' + e.lineno;
-  window.__showBootErr('启动失败：' + msg + (where ? '（' + where + '）' : '') + '，请截图发给红球。');
-});
-window.addEventListener('unhandledrejection', function(e){
-  var w = document.getElementById('wake');
-  if(w && w.classList.contains('hidden')) return;
-  window.__bootFailed = true;
-  var r = (e && e.reason) || {};
-  window.__showBootErr('启动失败：' + (r.message || r || '请求出错') + '，请截图发给红球。');
-});
-document.getElementById('wakeRetry').addEventListener('click', function(){
-  if(window.__bootFailed || typeof loadMenu !== 'function'){ location.reload(); }
-  else { loadMenu(); }
-});
+(function () {
+  'use strict';
+  // 身份对齐：与游戏客户端用同一个玩家标识（localStorage 键与生成规则
+  // 与服务器版客户端一致），同时写 cookie 供服务端认存档。
+  var PID_KEY = 'rxcq_server_player_id';
+  var DEVICE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{7,63}$/;
+  function genPid() { return 'p' + Math.random().toString(36).slice(2, 10); }
+  var pid = null;
+  try { pid = localStorage.getItem(PID_KEY); } catch (e) { pid = null; }
+  if (!pid || !DEVICE_RE.test(pid)) {
+    pid = genPid();
+    try { localStorage.setItem(PID_KEY, pid); } catch (e) { /* ignore */ }
+  }
+  document.cookie = 'lg_device_id=' + encodeURIComponent(pid) +
+    '; path=/; max-age=31536000; SameSite=Lax';
+
+  var $ = function (id) { return document.getElementById(id); };
+  function setMsg(t, cls) {
+    var m = $('claimMsg');
+    m.textContent = t || '';
+    m.className = 'msg' + (cls ? ' ' + cls : '');
+  }
+
+  function renderChars(chars) {
+    var box = $('charList');
+    var html = '';
+    for (var i = 0; i < 5; i++) {
+      var c = chars && chars[i];
+      if (c) {
+        var cls = { war: '战士', mage: '法师', tao: '道士', warrior: '战士', taoist: '道士' }[c.cls] || c.cls;
+        html += '<div class="char"><span>' + (i + 1) + ' 号位 · ' + c.name + '（' + cls + '）</span>' +
+          '<span>' + c.level + ' 级 · ' + c.gold + ' 金币</span></div>';
+      } else {
+        html += '<div class="char"><span class="empty">' + (i + 1) + ' 号位 · 空</span><span class="empty">进游戏新建</span></div>';
+      }
+    }
+    box.innerHTML = html;
+  }
+
+  function refreshChars() {
+    fetch('/api/characters?deviceId=' + encodeURIComponent(pid))
+      .then(function (r) { return r.json(); })
+      .then(function (j) { renderChars(j.characters || []); })
+      .catch(function () { $('charList').innerHTML = '<p>读取失败，点进入游戏后重试。</p>'; });
+  }
+
+  function refreshHealth() {
+    fetch('/api/health')
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (j.claimUsed) {
+          $('claimCard').style.display = 'none';
+        }
+      })
+      .catch(function () { /* ignore */ });
+  }
+
+  $('claimBtn').addEventListener('click', function () {
+    var code = $('claimCode').value.trim();
+    if (!code) { setMsg('先输入认领码', 'err'); return; }
+    $('claimBtn').disabled = true;
+    setMsg('认领中…');
+    fetch('/api/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: code, deviceId: pid }),
+    })
+      .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+      .then(function (x) {
+        if (x.body && x.body.ok) {
+          setMsg('认领成功，三个角色已到账', 'ok');
+          $('claimCard').style.display = 'none';
+          refreshChars();
+        } else {
+          setMsg((x.body && x.body.error) || '认领失败', 'err');
+        }
+      })
+      .catch(function () { setMsg('网络不对，再试一次', 'err'); })
+      .finally(function () { $('claimBtn').disabled = false; });
+  });
+
+  $('enterBtn').addEventListener('click', function () {
+    window.location.href = '/game/';
+  });
+
+  refreshChars();
+  refreshHealth();
+})();
 </script>
-<script src="data.js"></script>
-<script src="app.js"></script>
 </body>
 </html>

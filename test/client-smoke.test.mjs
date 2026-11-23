@@ -1,6 +1,7 @@
 'use strict';
-// 客户端联调：按 public/app.js 的协议走一遍 auth → create_room → move →
-// snapshot（收到玩家与怪物）；静态文件均为 200 且无外部引用。
+// 客户端联调：按 docs/protocol.md 的 WS 协议走一遍 auth → create_room → move →
+// snapshot（收到玩家与怪物）；静态文件：落地页 200、v89 游戏页 /game/ 需 cookie
+// 才能进、无 cookie 302 回 /，旧简化版客户端文件已下线。
 // 口径依据 docs/protocol.md：WS 首条必须是 {t:'auth', deviceId, slot}，
 // 快照每 100ms；比奇城为安全区不刷怪，传送后到比奇野外才有怪。
 import test from 'node:test';
@@ -35,7 +36,7 @@ test.after(async () => {
 
 test('WS 走通 app.js 协议：auth → create_room → teleport → move → snapshot 有玩家与怪物', async () => {
   const ws = track(new WsClient(srv.base, DEV));
-  // 与 public/app.js 第 399 行一致：连上后第一条发 {t:'auth', deviceId, slot}
+  // 按 docs/protocol.md：连上后第一条发 {t:'auth', deviceId, slot}
   const authed = await ws.connect(1);
   assert.equal(authed.character.name, 'ClientWar01');
   assert.equal(authed.slot, 1);
@@ -123,28 +124,53 @@ test('回城：野外可直接传送回比奇城', async () => {
   ws.close();
 });
 
-test('静态文件：首页 / app.js / style.css 均为 200 且无外部引用', async () => {
+test('静态文件：v89 客户端 /game/ 需 cookie，旧简化版文件已下线', async () => {
+  // 落地页仍为 200
   const home = await getText(srv.base, '/');
   assert.equal(home.status, 200);
   assert.match(home.text, /<title>热血传奇/);
 
-  const js = await getText(srv.base, '/app.js');
-  assert.equal(js.status, 200);
-  assert.ok(js.text.length > 1000, 'app.js 应有实质内容');
+  // 无 cookie：/game/ 302 回落地页
+  const noCookie = await fetch(srv.base + '/game/', { redirect: 'manual' });
+  assert.equal(noCookie.status, 302, '无 cookie 进 /game/ 应 302');
+  assert.equal(noCookie.headers.get('location'), '/');
+  await noCookie.text();
 
-  const css = await getText(srv.base, '/style.css');
+  // 有 cookie：/game/ 200，内容含游戏标题，并引用 ./assets/index-*.js
+  const withCookie = await fetch(srv.base + '/game/', {
+    headers: { Cookie: 'lg_device_id=' + DEV },
+  });
+  assert.equal(withCookie.status, 200, '有 cookie 进 /game/ 应 200');
+  const gameHtml = await withCookie.text();
+  assert.match(gameHtml, /热血传奇/);
+  const bundleMatch = gameHtml.match(/\.\/assets\/(index-[A-Za-z0-9_-]+\.js)/);
+  assert.ok(bundleMatch, '游戏页应引用 ./assets/index-*.js');
+  const bundle = await getText(srv.base, '/game/assets/' + bundleMatch[1]);
+  assert.equal(bundle.status, 200);
+  assert.ok(bundle.text.length > 1000, '游戏 bundle 应有实质内容');
+  const cssMatch = gameHtml.match(/\.\/assets\/(index-[A-Za-z0-9_-]+\.css)/);
+  assert.ok(cssMatch, '游戏页应引用 ./assets/index-*.css');
+  const css = await getText(srv.base, '/game/assets/' + cssMatch[1]);
   assert.equal(css.status, 200);
-  assert.ok(css.text.length > 100, 'style.css 应有实质内容');
+  assert.ok(css.text.length > 100, '游戏样式应有实质内容');
 
-  const data = await getText(srv.base, '/data.js');
-  assert.equal(data.status, 200);
-  assert.ok(data.text.includes('LegendData'), 'data.js 应为服务端数据表（LegendData）');
+  // 旧简化版客户端已删除：/app.js、/data.js、/style.css 均为 404
+  for (const p of ['/app.js', '/data.js', '/style.css']) {
+    const r = await getText(srv.base, p);
+    assert.equal(r.status, 404, p + ' 已下线，应为 404');
+  }
 
-  // 无外部引用：http(s):// 出现次数应为 0
-  const extRef = /https?:\/\//g;
-  for (const [name, text] of [['index.html', home.text], ['app.js', js.text], ['style.css', css.text], ['data.js', data.text]]) {
+  // 无外部请求：落地页与游戏页 0 处；bundle 与样式里只允许已知的惰性字符串
+  //（w3.org 命名空间、hatch.invalid 占位、react.dev 错误链接、tailwindcss 注释）
+  const extRef = /https?:\/\/[^\s"'<>)]+/g;
+  for (const [name, text] of [['index.html', home.text], ['game/index.html', gameHtml]]) {
     const hits = text.match(extRef) || [];
     assert.equal(hits.length, 0, name + ' 里不应有外部 http(s):// 引用，实际 ' + hits.length + ' 处');
   }
-  console.log('静态文件 200 且外部引用 0 处：/、/app.js、/style.css、/data.js');
+  const inert = /^https?:\/\/(www\.w3\.org\/(1998\/Math\/MathML|1999\/xlink|2000\/svg|XML\/1998\/namespace)|hatch\.invalid\/|react\.dev\/errors\/|tailwindcss\.com)/;
+  for (const [name, text] of [['game bundle', bundle.text], ['game css', css.text]]) {
+    const hits = (text.match(extRef) || []).filter((u) => !inert.test(u));
+    assert.equal(hits.length, 0, name + ' 里不应有业务外部引用，实际：' + JSON.stringify(hits));
+  }
+  console.log('静态文件 OK：/ 200、/game/ 有 cookie 200、无 cookie 302、旧三文件 404、bundle ' + bundleMatch[1] + ' 200');
 });

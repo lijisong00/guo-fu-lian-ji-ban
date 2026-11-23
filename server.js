@@ -21,6 +21,9 @@ const { WebSocketServer } = require('ws');
 const store = require('./lib/db.js');
 const backup = require('./lib/backup.js');
 const game = require('./lib/game.js');
+const { createActionsShim, deviceIdFromCookie } = require('./lib/actions-shim.js');
+// 服务器版客户端的 POST /actions 兼容层（见 docs/PORTING-V89.md）。
+const actionsShim = createActionsShim(store);
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = '0.0.0.0';
@@ -85,6 +88,12 @@ function normCls(cls) {
 function serveStatic(req, res) {
   let urlPath = decodeURIComponent(req.url.split('?')[0]);
   if (urlPath === '/') urlPath = '/index.html';
+  if (urlPath.endsWith('/')) urlPath += 'index.html';
+  // 服务器版游戏入口：无有效身份 cookie 时回落地页对齐身份（见 docs/PORTING-V89.md）。
+  if (urlPath === '/game/index.html' && !deviceIdFromCookie(req)) {
+    res.writeHead(302, { Location: '/' });
+    return res.end();
+  }
   const file = path.join(PUBLIC_DIR, urlPath);
   if (!file.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end('forbidden'); }
   fs.readFile(file, (err, data) => {
@@ -353,6 +362,8 @@ async function handleApi(req, res) {
 // ---------------------------------------------------------------- HTTP 服务
 const server = http.createServer((req, res) => {
   if (req.url.startsWith('/api/')) return handleApi(req, res);
+  const noQuery = req.url.split('?')[0];
+  if (noQuery === '/actions' || noQuery === '/game/actions') return actionsShim.handleActions(req, res);
   return serveStatic(req, res);
 });
 

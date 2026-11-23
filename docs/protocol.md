@@ -365,3 +365,19 @@ node scripts/verify-migration.mjs  # 校验迁移结果
     `initial:true` 且 `req:1`，但 `CLASSES` 的 `initialSkill` 与
     任务口径均为「道士治愈术」单开局技能，旧版开局也只给治愈术。
     服务端新角色只给治愈术；精神力战法需打书习得（1 级即可学）。
+
+## 服务器版 v89 客户端（/actions 兼容层，2026-11-24）
+
+详见 `docs/PORTING-V89.md`。要点：
+
+- 游戏本体是服务器版 artifact 的 `client/dist` 原样产物，放 `public/game/`，
+  入口 `/game/`；落地页（`public/index.html`）只做身份对齐 + 认领 + 进入游戏。
+- 客户端只调 `POST ./actions`（`/actions` 与 `/game/actions` 同一个 handler，
+  见 `lib/actions-shim.js`）：`{action, args, actionCallId}` → `{data}` 或 `{error}`。
+- 13 个动作：`listSaves/getSave/putSave/resetSave`（存档，按 cookie 设备隔离）、
+  `createRoom/joinRoom/heartbeat/leaveRoom`（内存房间 overlay，与 `lib/game.js`
+  的权威房间隔离）、`listAuction/createListing/buyListing/delistListing/claimAuction`
+  （独立表 `art_listings`，与联机版拍卖行表隔离）。
+- 身份：`localStorage rxcq_server_player_id` 与 cookie `lg_device_id` 取同一值；
+  无有效 cookie 访问 `/game/` 会 302 回 `/`。
+- 旧 REST/WS 协议与 `lib/game.js` 一字未动；新客户端不走 WebSocket。

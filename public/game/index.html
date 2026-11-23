@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- Empty inline icon: stops the browser fetching /favicon.ico, which
+         lives outside the space's routes and fails auth. -->
+    <link rel="icon" href="data:," />
+    <title>热血传奇割草服务器版</title>
+    <!-- 静态加载兜底（2026-11-21）：不依赖任何外部 CSS/JS 文件，浏览器拿到 HTML 就能
+         先画出这段，React 挂载后会被自动替换。若样式表或脚本在网络上卡住（此前电脑
+         网页端出现过整屏纯黑、没有任何文字），玩家至少能看到「正在加载」而不是黑屏；
+         超过 12 秒还没挂载，下面脚本会追加一行提示引导刷新。 -->
+    <style>
+      html, body { background: #171008; }
+      .boot-fallback {
+        min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+        justify-content: center; gap: 14px; padding: 24px; text-align: center;
+        color: #a08d64; background: #171008;
+        font-family: "Songti SC", "STSong", "SimSun", serif;
+      }
+      .boot-fallback .boot-title { color: #d4a437; font-size: 30px; font-weight: 900; letter-spacing: 2px; }
+      .boot-fallback .boot-hint { display: none; font-size: 14px; line-height: 1.7; }
+      .boot-fallback .boot-err { display: none; font-size: 12px; color: #c0392b; max-width: 90vw; word-break: break-all; }
+      .boot-fallback .boot-reload {
+        display: none; min-height: 2.5rem; padding: 8px 22px; border-radius: 10px; cursor: pointer;
+        border: 1px solid #4a3517; background: #2e1e0c; color: #d4a437; font-size: 16px; font-weight: 700;
+      }
+    </style>
+    
+  <link rel="stylesheet" crossorigin href="./assets/index-redh7j3f.css"><script type="module" crossorigin src="./assets/index-927xwyw8.js"></script></head>
+  <body>
+    <div
+      data-generated-space-root=""
+      data-generated-space-slug="re-xie-chuan-qi-ge-cao-fu-wu-qi-ban"
+    ><div class="boot-fallback" id="boot-fallback">
+      <div class="boot-title">热血传奇 · 割草</div>
+      <div>正在加载游戏…</div>
+      <div class="boot-hint" id="boot-hint">加载有点久，网络可能卡住了。<br />点下面按钮重新加载一次试试。</div>
+      <div class="boot-err" id="boot-err"></div>
+      <button class="boot-reload" id="boot-reload" type="button" onclick="window.location.reload()">重新加载</button>
+    </div></div>
+    <script>
+      // 加载看门狗（2026-11-21 加强）：先记下挂载前发生的第一个脚本/资源错误，
+      // 12 秒后游戏还没挂载（兜底画面还在）就把提示、错误信息与重新加载按钮一起亮出来，
+      // 不让玩家对着「正在加载」干等或对着黑屏猜。
+      window.__bootErr = "";
+      window.addEventListener("error", function (e) {
+        if (window.__bootErr) return;
+        if (e && e.message) window.__bootErr = e.message;
+        else if (e && e.target && e.target.tagName) window.__bootErr = "资源加载失败：" + (e.target.src || e.target.href || e.target.tagName);
+      }, true);
+      window.setTimeout(function () {
+        if (!document.getElementById("boot-fallback")) return;
+        var hint = document.getElementById("boot-hint");
+        if (hint) hint.style.display = "block";
+        var btn = document.getElementById("boot-reload");
+        if (btn) btn.style.display = "inline-block";
+        if (window.__bootErr) {
+          var err = document.getElementById("boot-err");
+          if (err) {
+            err.textContent = "错误信息：" + window.__bootErr;
+            err.style.display = "block";
+          }
+        }
+      }, 12000);
+    </script>
+  </body>
+</html>
