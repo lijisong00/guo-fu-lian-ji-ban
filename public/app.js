@@ -16,21 +16,21 @@ var __memStore = {};
 function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return (k in __memStore) ? __memStore[k] : null; } }
 function lsSet(k, v){ try{ localStorage.setItem(k, v); }catch(e){ __memStore[k] = String(v); } }
 var D = window.LegendData || {};
-var CLASSES = {};
-(D.CLASSES || []).forEach(function(c){ CLASSES[c.id] = c; });
-var SKILLS = D.SKILLS || {};
-var CLASS_SKILLS = D.CLASS_SKILLS || {};
-var STAGES = {};
-(D.STAGES || []).forEach(function(s){ STAGES[s.id] = s; });
+var CLASSES_BY_ID = {};
+(D.CLASSES || []).forEach(function(c){ CLASSES_BY_ID[c.id] = c; });
+var SKILLS_BY_ID = D.SKILLS || {};
+var CLASS_SKILLS_BY_ID = D.CLASS_SKILLS || {};
+var STAGES_BY_ID = {};
+(D.STAGES || []).forEach(function(s){ STAGES_BY_ID[s.id] = s; });
 var STAGE_LIST = D.STAGES || [];
-var MONSTERS = {};
-(D.MONSTERS || []).forEach(function(m){ MONSTERS[m.id] = m; });
-var BOSSES = {};
-(D.BOSSES || []).forEach(function(b){ BOSSES[b.id] = b; });
-var EQUIPS = {};
-(D.EQUIPS || []).forEach(function(e){ EQUIPS[e.id] = e; });
-var SLOT_ORDER = D.SLOT_ORDER || ['weapon','armor','helmet','necklace','braceL','braceR','ringL','ringR','boots'];
-var SLOT_LABEL = D.SLOT_LABEL || { weapon:'武器', armor:'衣服', helmet:'头盔', necklace:'项链', braceL:'左手镯', braceR:'右手镯', ringL:'左戒指', ringR:'右戒指', boots:'鞋靴' };
+var MONSTERS_BY_ID = {};
+(D.MONSTERS || []).forEach(function(m){ MONSTERS_BY_ID[m.id] = m; });
+var BOSSES_BY_ID = {};
+(D.BOSSES || []).forEach(function(b){ BOSSES_BY_ID[b.id] = b; });
+var EQUIPS_BY_ID = {};
+(D.EQUIPS || []).forEach(function(e){ EQUIPS_BY_ID[e.id] = e; });
+var SLOT_ORDER_LIST = D.SLOT_ORDER || ['weapon','armor','helmet','necklace','braceL','braceR','ringL','ringR','boots'];
+var SLOT_LABEL_MAP = D.SLOT_LABEL || { weapon:'武器', armor:'衣服', helmet:'头盔', necklace:'项链', braceL:'左手镯', braceR:'右手镯', ringL:'左戒指', ringR:'右戒指', boots:'鞋靴' };
 var POTION_TIERS = (D.POTIONS && D.POTIONS.tiers) || [
   { id:'small', name:'小瓶', hpPct:0.30, mpPct:0.30, price:20 },
   { id:'mid', name:'中瓶', hpPct:0.55, mpPct:0.60, price:40 },
@@ -91,9 +91,9 @@ function itemStatsText(it){
 function slotLabel(k){
   if(k === 'bracelet') return '手镯';
   if(k === 'ring') return '戒指';
-  return SLOT_LABEL[k] || k;
+  return SLOT_LABEL_MAP[k] || k;
 }
-function clsName(k){ return k === 'all' ? '通用' : (CLASSES[k] ? CLASSES[k].name : k); }
+function clsName(k){ return k === 'all' ? '通用' : (CLASSES_BY_ID[k] ? CLASSES_BY_ID[k].name : k); }
 function potionTotal(v){
   if(typeof v === 'number') return v;
   if(Array.isArray(v)) return v.reduce(function(a, b){ return a + (b || 0); }, 0);
@@ -505,7 +505,7 @@ var BOSS_SPRITE = {
 function monsterSpriteKey(m){
   if(!m) return null;
   if(m.boss){
-    if(BOSSES[m.key]) return BOSS_SPRITE[m.key] || null;
+    if(BOSSES_BY_ID[m.key]) return BOSS_SPRITE[m.key] || null;
     if(m.key === 'shiwang') return 'shiwang';
     if(m.key === 'boss_woma' || m.key === 'boss_zhenwoma' || m.key === 'boss_chiyue') return null; // 自定义画
     return null;
@@ -636,7 +636,7 @@ var lastLevel = 0;
 var wsRetry = 0;
 
 /* 坐标换算：服务端中心原点 ↔ 客户端左上角原点 */
-function stageOf(){ return (SNAP && SNAP.stage && STAGES[SNAP.stage]) || STAGES.city || { w: 2600, h: 2000, ground: '#3d4a26' }; }
+function stageOf(){ return (SNAP && SNAP.stage && STAGES_BY_ID[SNAP.stage]) || STAGES_BY_ID.city || { w: 2600, h: 2000, ground: '#3d4a26' }; }
 function toClient(sx, sy){ var st = stageOf(); return { x: sx + st.w / 2, y: sy + st.h / 2 }; }
 function toServer(cx, cy){ var st = stageOf(); return { x: cx - st.w / 2, y: cy - st.h / 2 }; }
 function meSnap(){
@@ -760,7 +760,7 @@ function onWsMessage(m){
   if(!m || !m.t) return;
   switch(m.t){
     case 'authed': {
-      log('已进入：' + m.character.name + '（' + (CLASSES[m.character.cls] ? CLASSES[m.character.cls].name : m.character.cls) + ' Lv' + m.character.level + '）', 'good');
+      log('已进入：' + m.character.name + '（' + (CLASSES_BY_ID[m.character.cls] ? CLASSES_BY_ID[m.character.cls].name : m.character.cls) + ' Lv' + m.character.level + '）', 'good');
       if(pendingRoom && pendingRoom.join){
         wsSend({ t: 'join_room', code: pendingRoom.join });
         pendingRoom = null;
@@ -872,7 +872,7 @@ function renderSlots(){
       b.className = 'slot' + ((idx + 1) === mySlot ? ' sel' : '');
       if(ch){
         b.innerHTML = '<div class="snum">' + (idx + 1) + ' 号位</div><div class="sname">' + esc(ch.name) + '</div>' +
-          '<div class="smeta">' + esc(CLASSES[ch.cls] ? CLASSES[ch.cls].name : ch.cls) + ' · Lv' + ch.level + '</div>';
+          '<div class="smeta">' + esc(CLASSES_BY_ID[ch.cls] ? CLASSES_BY_ID[ch.cls].name : ch.cls) + ' · Lv' + ch.level + '</div>';
       } else {
         b.innerHTML = '<div class="snum">' + (idx + 1) + ' 号位</div><div class="sempty">（空）</div>';
       }
@@ -888,19 +888,19 @@ function renderSlots(){
 function updateSlotInfo(){
   var ch = chars[mySlot - 1];
   $('slotInfo').innerHTML = ch
-    ? '当前：<b>' + esc(ch.name) + '</b> · ' + esc(CLASSES[ch.cls] ? CLASSES[ch.cls].name : ch.cls) + ' Lv' + ch.level + ' · 金币 ' + fmt(ch.gold)
+    ? '当前：<b>' + esc(ch.name) + '</b> · ' + esc(CLASSES_BY_ID[ch.cls] ? CLASSES_BY_ID[ch.cls].name : ch.cls) + ' Lv' + ch.level + ' · 金币 ' + fmt(ch.gold)
     : '当前：' + mySlot + ' 号位是空的，可以新建角色。';
 }
 function buildClassCards(){
   var grid = $('clsGrid');
   grid.innerHTML = '';
   ['war', 'mage', 'tao'].forEach(function(k){
-    var c = CLASSES[k]; if(!c) return;
+    var c = CLASSES_BY_ID[k]; if(!c) return;
     var b = document.createElement('button');
     b.className = 'clsCard' + (k === selectedClass ? ' sel' : '');
-    var count = (CLASS_SKILLS[k] || []).length;
+    var count = (CLASS_SKILLS_BY_ID[k] || []).length;
     b.innerHTML = '<h3>' + c.face + ' ' + c.name + '</h3><p>' + esc(c.desc) + '</p>' +
-      '<p class="stat">初始技能：' + esc(SKILLS[c.initialSkill] ? SKILLS[c.initialSkill].name : '') + ' · 技能共 ' + count + ' 门</p>';
+      '<p class="stat">初始技能：' + esc(SKILLS_BY_ID[c.initialSkill] ? SKILLS_BY_ID[c.initialSkill].name : '') + ' · 技能共 ' + count + ' 门</p>';
     b.addEventListener('click', function(){
       selectedClass = k;
       var cards = grid.querySelectorAll('.clsCard');
@@ -996,7 +996,7 @@ function updateHUD(){
   var cleared = ME.cleared || {};
   var n = 0;
   for(var k in cleared) if(cleared[k] && k !== 'andian') n++;
-  $('hudMeta').textContent = (CLASSES[ME.cls] ? CLASSES[ME.cls].name : ME.cls) + ' · ' + ME.level + ' 级 · 通关 ' + n + ' 图';
+  $('hudMeta').textContent = (CLASSES_BY_ID[ME.cls] ? CLASSES_BY_ID[ME.cls].name : ME.cls) + ' · ' + ME.level + ' 级 · 通关 ' + n + ' 图';
   updateBars();
 }
 function updateBars(){
@@ -1021,7 +1021,7 @@ function updateBars(){
       slotEl.classList.remove('no-mp');
       continue;
     }
-    var def = SKILLS[id];
+    var def = SKILLS_BY_ID[id];
     if(!def){ slotEl.querySelector('.sn').textContent = id; continue; }
     var sk = (ME.learned || {})[id];
     slotEl.querySelector('.sn').textContent = def.name;
@@ -1433,7 +1433,7 @@ function drawMonsterAt(x, y, m, r, now, friendly){
   } else if(mini){
     ctx.save(); ctx.translate(x, y + r * 0.1); ctx.scale(r, r); sprMini(ctx, mini, r); ctx.restore();
   } else {
-    drawCreatureFallback(x, y, (MONSTERS[m.key] && MONSTERS[m.key].color) || '#8a7f6a', r, m.boss, now);
+    drawCreatureFallback(x, y, (MONSTERS_BY_ID[m.key] && MONSTERS_BY_ID[m.key].color) || '#8a7f6a', r, m.boss, now);
   }
   if(m.boss){ ctx.font = '15px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('👑', x, y - r * 1.62); }
   ctx.font = (m.boss ? 'bold 14px' : '12px') + ' sans-serif'; ctx.textAlign = 'center';
@@ -1487,7 +1487,7 @@ function drawOtherPlayer(pl, x, y, now){
 }
 function drawCity(now){
   var W = canvas.width, H = canvas.height;
-  var st = STAGES.city;
+  var st = STAGES_BY_ID.city;
   /* 护城河 */
   ctx.strokeStyle = '#2e5a6a'; ctx.lineWidth = 34;
   ctx.strokeRect(150 - cam.x, 120 - cam.y, st.w - 300, st.h - 240);
@@ -1621,7 +1621,7 @@ window.closePanel = closePanel;
 function bagSignature(){
 if(!ME) return '';
 var w = [];
-for(var i = 0; i < SLOT_ORDER.length; i++){ var it = (ME.worn || {})[SLOT_ORDER[i]]; w.push(it? it.uid: '');}
+for(var i = 0; i < SLOT_ORDER_LIST.length; i++){ var it = (ME.worn || {})[SLOT_ORDER_LIST[i]]; w.push(it? it.uid: '');}
 var b = (ME.bag || []).map(function(x){ return x.uid;}).join(',');
 return w.join('|') + '#' + b + '#' + (ME.books || []).join(',') + '#' + ME.gold;
 }
@@ -1649,12 +1649,12 @@ function renderBag(){
 if(!ME) return;
 var inCity = SNAP && SNAP.stage === 'city';
 var h = '<h2>背包 · 人物</h2>';
-h += '<p class="note">' + esc(ME.name) + ' · ' + esc(CLASSES[ME.cls]? CLASSES[ME.cls].name: ME.cls) + ' ' + ME.level + '级 · 金币 <b>' + fmt(ME.gold) + '</b> · 红药 ' + potionTotal(ME.hpPots) + ' / 蓝药 ' + potionTotal(ME.mpPots) + '<br/>' +
+h += '<p class="note">' + esc(ME.name) + ' · ' + esc(CLASSES_BY_ID[ME.cls]? CLASSES_BY_ID[ME.cls].name: ME.cls) + ' ' + ME.level + '级 · 金币 <b>' + fmt(ME.gold) + '</b> · 红药 ' + potionTotal(ME.hpPots) + ' / 蓝药 ' + potionTotal(ME.mpPots) + '<br/>' +
 '生命 ' + ME.maxHp + ' · 魔法 ' + ME.maxMp + ' · 防御 ' + ME.def + ' · 魔御 ' + ME.mdef + ' · 准确 ' + ME.acc + '（异职业装备穿上不计属性）</p>';
 h += '<h3>穿戴（9 个位置）— 点装备卸下</h3><div class="equipGrid">';
-for(var i = 0; i < SLOT_ORDER.length; i++){
-var k = SLOT_ORDER[i], it = (ME.worn || {})[k];
-h += '<div class="equipSlot" onclick="unequipItem(\'' + k + '\')"><div class="sl">' + SLOT_LABEL[k] + '</div>' +
+for(var i = 0; i < SLOT_ORDER_LIST.length; i++){
+var k = SLOT_ORDER_LIST[i], it = (ME.worn || {})[k];
+h += '<div class="equipSlot" onclick="unequipItem(\'' + k + '\')"><div class="sl">' + SLOT_LABEL_MAP[k] + '</div>' +
 (it? '<div class="it">' + esc(it.name) + (it.jp? ' ·极品': '') + (it.enh? ' +' + it.enh: '') + '</div><div class="st">' + esc(itemStatsText(it)) + '<br/>' + esc(clsName(it.cls)) + '</div>': '<div class="st">（空）</div>') + '</div>';
 }
 h += '</div>';
@@ -1671,10 +1671,10 @@ h += '<div class="bagItem' + (b.epic || b.jp? ' epic': '') + '" onclick="bagItem
 esc(slotLabel(b.slot)) + ' · ' + esc(clsName(b.cls)) + '<br/>' + esc(itemStatsText(b)) + '</div></div>';
 }
 for(var k2 = 0; k2 < books.length; k2++){
-var sid = books[k2], sd = SKILLS[sid];
+var sid = books[k2], sd = SKILLS_BY_ID[sid];
 if(!sd) continue;
 h += '<div class="bagItem book" onclick="useBook(\'' + sid + '\')"><div class="it">《' + esc(sd.name) + '》</div><div class="st">' +
-esc(CLASSES[sd.cls]? CLASSES[sd.cls].name: sd.cls) + '技能 · ' + sd.req + ' 级可学<br/>' + esc(sd.desc) + '</div></div>';
+esc(CLASSES_BY_ID[sd.cls]? CLASSES_BY_ID[sd.cls].name: sd.cls) + '技能 · ' + sd.req + ' 级可学<br/>' + esc(sd.desc) + '</div></div>';
 }
 h += '</div>';
 if(inCity) h += '<p class="note" style="margin-top:.7rem">卖装备：先开启「出售模式」，再点装备即卖（按估价卖）；没开出售模式时点装备 = 穿上。手镯 / 戒指有两个位置，会先填空位，两边都满时替换属性较弱的那件。</p>';
@@ -1695,8 +1695,8 @@ wsSend({ t: 'unequip', slot: slot});
 sfx('click');
 }
 function useBook(sid){
-var sd = SKILLS[sid]; if(!sd) return;
-if(sd.cls!== ME.cls){ toast('这是' + (CLASSES[sd.cls]? CLASSES[sd.cls].name: sd.cls) + '的技能书，你学不了，先留着吧'); return;}
+var sd = SKILLS_BY_ID[sid]; if(!sd) return;
+if(sd.cls!== ME.cls){ toast('这是' + (CLASSES_BY_ID[sd.cls]? CLASSES_BY_ID[sd.cls].name: sd.cls) + '的技能书，你学不了，先留着吧'); return;}
 if((ME.learned || {})[sid]){ toast('已经学会了'); return;}
 if(ME.level < sd.req){ toast('等级不够：' + sd.req + ' 级才能学《' + sd.name + '》'); return;}
 wsSend({ t: 'use_book', bookId: sid});
@@ -1716,9 +1716,9 @@ function renderSkills(){
 if(!ME) return;
 var h = '<h2>技能</h2><p class="note">选 2 门主动技能上场，两门各自按冷却同时释放。被动技能习得即生效、不占位置。熟练度：每次命中 +1，满 1000 升一级（最高 4 级）。已学 ' +
 Object.keys(ME.learned || {}).length + ' 门。</p>';
-var ids = CLASS_SKILLS[ME.cls] || [];
+var ids = CLASS_SKILLS_BY_ID[ME.cls] || [];
 for(var i = 0; i < ids.length; i++){
-var id = ids[i], def = SKILLS[id]; if(!def) continue;
+var id = ids[i], def = SKILLS_BY_ID[id]; if(!def) continue;
 var learned = (ME.learned || {})[id];
 var inSlot = (ME.activeSkills || []).indexOf(id);
 h += '<div class="skillRow"><div class="si"><div class="sn2">' + esc(def.name) +
@@ -1730,7 +1730,7 @@ else h += '<button onclick="skillOn(\'' + id + '\')" ' + ((ME.activeSkills || []
 }
 h += '</div>';
 }
-h += '<p class="note">当前上场：' + ((ME.activeSkills || []).map(function(id){ return SKILLS[id]? SKILLS[id].name: id;}).join('、') || '无') + '</p>';
+h += '<p class="note">当前上场：' + ((ME.activeSkills || []).map(function(id){ return SKILLS_BY_ID[id]? SKILLS_BY_ID[id].name: id;}).join('、') || '无') + '</p>';
 openPanel(h);
 }
 function skillOn(id){
@@ -1751,7 +1751,7 @@ var inCity = SNAP.stage === 'city';
 var h = '<h2>传送员 · 选地图</h2><p class="note">出城只能从比奇城出发；回城随时能回。未知暗殿不在列表里——入口在蜈蚣洞的「连接通道」。✦ = 已点亮的图。</p>';
 h += '<div class="mapRow"><div><div class="mn">比奇城（安全区）' + (inCity ? '（当前）' : '') + '</div><div class="md">传送员 / 商店 / 维修 / 拍卖行</div></div>' +
   '<button onclick="goMap(\'city\')" ' + (inCity ? 'disabled' : '') + '>回城</button></div>';
-var targets = (STAGES.city && STAGES.city.to) || [];
+var targets = (STAGES_BY_ID.city && STAGES_BY_ID.city.to) || [];
 var lit = ME.bonusLit || [];
 STAGE_LIST.forEach(function(m){
 if(m.id === 'andian' || m.id === 'city') return;
@@ -1873,7 +1873,7 @@ h += '<div class="aucItem"><div class="an">' + esc(b.name) + (b.jp? ' ·极品':
 h += '<h3>技能书 — 输价上架</h3>';
 if(!(ME.books || []).length) h += '<p class="note">没有多余的技能书。</p>';
 for(var k2 = 0; k2 < (ME.books || []).length; k2++){
-var sid = ME.books[k2], sd = SKILLS[sid]; if(!sd) continue;
+var sid = ME.books[k2], sd = SKILLS_BY_ID[sid]; if(!sd) continue;
 h += '<div class="aucItem"><div class="an">📖 《' + esc(sd.name) + '》</div><div class="am">' + esc(clsName(sd.cls)) + ' · ' + sd.req + '级可学</div>' +
 '<div class="row" style="margin-top:.4rem"><input type="number" min="1" id="price_b_' + sid + '" placeholder="标价（金币）" style="flex:1">' +
 '<button onclick="listBook(\'' + sid + '\')">上架</button></div></div>';
@@ -1884,7 +1884,7 @@ for(var c = 0; c < auctionClaims.length; c++){
 var cl = auctionClaims[c];
 var cdesc = '';
 if(cl.kind === 'gold') cdesc = '💰 出售所得金币 <b>+' + fmt(cl.payload) + '</b>';
-else if(cl.payload && cl.payload.bookId) cdesc = '📖 《' + esc(SKILLS[cl.payload.bookId]? SKILLS[cl.payload.bookId].name: cl.payload.bookId) + '》';
+else if(cl.payload && cl.payload.bookId) cdesc = '📖 《' + esc(SKILLS_BY_ID[cl.payload.bookId]? SKILLS_BY_ID[cl.payload.bookId].name: cl.payload.bookId) + '》';
 else if(cl.payload && cl.payload.name) cdesc = esc(cl.payload.name) + ' · ' + esc(itemStatsText(cl.payload));
 else cdesc = '物品';
 h += '<div class="aucItem"><div class="an">' + cdesc + '</div>' +
