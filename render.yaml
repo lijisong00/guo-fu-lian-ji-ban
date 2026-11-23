@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: guo-fu-lian-ji-ban
+    env: node
+    plan: free
+    buildCommand: npm install && npm run migrate
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
