@@ -182,6 +182,42 @@ test('actions 兼容层：存档 / 认领 / 房间 / 拍卖行', async (t) => {
   const gone = await actions(base, PID_B, 'joinRoom', { ...meB, code });
   assert.equal(gone.ok, false, '全员离房后房间应解散');
 
+  // --- 房间列表：只列未满员的房，含房主/地图/人数/成员 ---
+  const c2 = await actions(base, PID_A, 'createRoom', { ...meA, stageKey: '20', layer: 0 });
+  assert.equal(c2.ok, true);
+  const code2 = c2.code;
+  await actions(base, PID_B, 'joinRoom', { ...meB, code: code2 });
+  let listedRooms = await actions(base, PID_A, 'listRooms', {});
+  assert.equal(listedRooms.rooms.length, 1, '应列出 1 间未满房');
+  const row = listedRooms.rooms[0];
+  assert.equal(row.code, code2);
+  assert.equal(row.stageKey, '20');
+  assert.equal(row.hostName, '慕尼黑好炸药');
+  assert.equal(row.memberCount, 2);
+  assert.equal(row.members.length, 2);
+  assert.equal(row.members[0].name, '慕尼黑好炸药', '房主排第一');
+  assert.equal(row.members[1].name, '路人乙');
+  assert.equal(row.members[1].classId, 'warrior');
+  assert.equal(row.members[1].level, 5);
+  // 满 4 人后不再列出
+  for (let i = 0; i < 2; i++) {
+    const p = `ptest-device-y0${i}`;
+    await actions(base, p, 'joinRoom', { code: code2, playerId: p, name: `路人${i}`, classId: 'mage', level: 1, maxHp: 100 });
+  }
+  listedRooms = await actions(base, PID_A, 'listRooms', {});
+  assert.equal(listedRooms.rooms.length, 0, '满员房间不应出现在列表里');
+  // 一人离开后重新出现
+  await actions(base, 'ptest-device-y00', 'leaveRoom', { code: code2, playerId: 'ptest-device-y00' });
+  listedRooms = await actions(base, PID_A, 'listRooms', {});
+  assert.equal(listedRooms.rooms.length, 1);
+  assert.equal(listedRooms.rooms[0].memberCount, 3);
+  // 全员离开后房间解散，列表为空
+  await actions(base, PID_A, 'leaveRoom', { code: code2, playerId: PID_A });
+  await actions(base, PID_B, 'leaveRoom', { code: code2, playerId: PID_B });
+  await actions(base, 'ptest-device-y01', 'leaveRoom', { code: code2, playerId: 'ptest-device-y01' });
+  listedRooms = await actions(base, PID_A, 'listRooms', {});
+  assert.equal(listedRooms.rooms.length, 0);
+
   // --- 拍卖行：上架 → 列表 → 购买 → 双方领取；下架 → 领取退回；到期 → 领取退回 ---
   const sword = { uid: 101, name: '测试剑', slot: 'weapon', tier: 1, price: 0 };
   const sA = saveObj('慕尼黑好炸药', 'mage', 11, 8755, [sword]);
