@@ -45,13 +45,14 @@ test.after(async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('世界 HTTP 走通：joinWorld → worldSync 有玩家与怪物；比奇城安全区无怪', async () => {
+test('世界 HTTP 走通：joinWorld → worldSync 有玩家与怪物；盟重土城安全区无怪', async () => {
   const me = { playerId: DEV, name: 'ClientWar01', classId: 'warrior', level: 1, maxHp: 100 };
-  // 比奇城（stage 22）安全区不刷怪
-  const city = await actions(srv.base, DEV, 'joinWorld', { ...me, worldKey: '22:0', x: 0, y: 0 });
+  // 盟重土城（stage 21，2026-11-24 由盟重野外合并）安全区不刷怪
+  const city = await actions(srv.base, DEV, 'joinWorld', { ...me, worldKey: '21:0', x: 0, y: 0 });
   assert.equal(city.ok, true);
-  assert.equal(city.monsters.length, 0, '比奇城安全区不刷怪');
-  await actions(srv.base, DEV, 'leaveWorld', { playerId: DEV, worldKey: '22:0' });
+  assert.equal(city.monsters.length, 0, '盟重土城安全区不刷怪');
+  assert.equal(city.boss.state, 0, '盟重土城安全区无 Boss');
+  await actions(srv.base, DEV, 'leaveWorld', { playerId: DEV, worldKey: '21:0' });
 
   // 比奇野外（stage 1）应有怪物
   const joined = await actions(srv.base, DEV, 'joinWorld', { ...me, worldKey: '1:0', x: 0, y: 0 });

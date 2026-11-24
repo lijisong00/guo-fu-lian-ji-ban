@@ -79,10 +79,14 @@ test('引擎：整波一小时刷新——Boss 与普通怪死后不到整点不
   const eng = createWorlds(worldData);
   const now = Date.now();
   const w = eng.getOrCreate(19, 0);
-  const waveAt = w.nextWaveAt;
+  let waveAt = w.nextWaveAt;
   assert.ok(waveAt > now, '建世界时下次整波应为未来时间');
   assert.equal(new Date(waveAt).getMinutes(), 0, '下次整波应在整点 :00');
   assert.equal(new Date(waveAt).getSeconds(), 0);
+  // 把下次整波钉到测试时钟的 1 小时后：否则测试跑在整点前 14 分钟内时，
+  // 「+14 分钟」那步会跨过整点、整波合法刷回，测试会误判。
+  w.nextWaveAt = now + 60 * 60 * 1000;
+  waveAt = w.nextWaveAt;
   const boss = w.boss;
   const fullNormal = [...w.monsters.values()].filter((m) => !m.boss && !m.dead).length;
   eng.join(w, { playerId: 'u1', name: '甲', classId: 'war', level: 1, x: boss.x, y: boss.y, hp: 100, maxHp: 100 }, now);
@@ -118,6 +122,101 @@ test('引擎：整波一小时刷新——Boss 与普通怪死后不到整点不
   assert.ok([...w.monsters.values()].some((m) => !m.dead && m.kind === kind), '应补同种怪');
   assert.ok(w.nextWaveAt > waveAt, '整波后下次整波应推到再下一个整点');
   console.log('整波一小时刷新通过：Boss 与普通怪不到整点不回，整点一次性全回');
+});
+
+test('引擎：盟重土城安全区零怪 + 多层地图只留最后一层有 Boss', () => {
+  const eng = createWorlds(worldData);
+  // 地图从 16 段减到 15 段（删 id 22），主线 14 张（未知暗殿 id 14 不计）
+  assert.equal(worldData.STAGES.length, 15);
+  assert.equal(worldData.STAGES.find((s) => s.id === 22), undefined);
+  assert.equal(worldData.STAGES.filter((s) => s.id !== 14).length, 14);
+  const mz = worldData.STAGES.find((s) => s.id === 21);
+  assert.equal(mz.name, '盟重土城');
+  assert.equal(mz.safe, true);
+  assert.equal(mz.full, '地图六 · 盟重土城');
+  // 安全区：零怪零 Boss
+  const city = eng.getOrCreate(21, 0);
+  assert.equal(city.monsters.size, 0);
+  assert.equal(city.boss, null);
+  // 非最后一层无 Boss，小怪还在
+  const noBoss = [[4, 0], [4, 1], [5, 0], [5, 1], [5, 2], [7, 0], [7, 1], [8, 0], [8, 1], [8, 2], [8, 3], [6, 0], [6, 7], [9, 0], [9, 6], [15, 0], [13, 0], [13, 5]];
+  for (const [sid, li] of noBoss) {
+    const w = eng.getOrCreate(sid, li);
+    assert.equal(w.boss, null, `${sid}:${li} 不应有 Boss`);
+    assert.equal([...w.monsters.values()].filter((m) => m.boss).length, 0, `${sid}:${li} 不应有 Boss 怪`);
+    assert.ok([...w.monsters.values()].filter((m) => !m.boss && !m.dead).length > 0, `${sid}:${li} 小怪应还在`);
+  }
+  // 最后一层 Boss 留着
+  const keepBoss = [[4, 2, '骷髅精灵'], [5, 3, '尸王'], [6, 8, '白野猪王'], [7, 2, '沃玛教主'], [8, 4, '触龙神'], [9, 7, '祖玛教主'], [13, 6, '赤月恶魔'], [15, 1, '邪恶巨人']];
+  for (const [sid, li, name] of keepBoss) {
+    const w = eng.getOrCreate(sid, li);
+    assert.ok(w.boss, `${sid}:${li} 应有 Boss`);
+    assert.equal(w.boss.bossName, name);
+  }
+  // 单层图 Boss 不动
+  assert.equal(eng.getOrCreate(1, 0).boss.bossName, '钉耙猫王');
+  assert.equal(eng.getOrCreate(19, 0).boss.bossName, '毒蜘蛛王');
+  // 整波后无 Boss 的层仍不刷 Boss
+  const now = Date.now();
+  const w40 = eng.getOrCreate(4, 0);
+  eng.join(w40, { playerId: 'u1', name: '甲', classId: 'war', level: 1, x: 0, y: 0, hp: 100, maxHp: 100 }, now);
+  for (const m of w40.monsters.values()) m.dead = true;
+  eng.tick(w40, w40.nextWaveAt + 1000);
+  assert.equal(w40.boss, null, '整波后无 Boss 的层仍不应有 Boss');
+  assert.ok([...w40.monsters.values()].filter((m) => !m.boss && !m.dead).length > 0, '整波后小怪应补满');
+  console.log('盟重土城零怪 + 多层只留末层 Boss 通过');
+});
+
+test('引擎：骷髅洞/僵尸洞 pool 删怪 + 电僵尸进二三层', () => {
+  const eng = createWorlds(worldData);
+  const kinds = (sid, li) => new Set([...eng.getOrCreate(sid, li).monsters.values()].filter((m) => !m.boss).map((m) => m.kind));
+  assert.deepEqual([...kinds(4, 2)].sort(), ['dongqu', 'kulou', 'kuloujiang', 'toufu', 'xiezi']);
+  assert.deepEqual([...kinds(5, 0)].sort(), ['dongqu', 'jiangshi', 'kuangjiang', 'paxing']);
+  assert.deepEqual([...kinds(5, 1)].sort(), ['dianjiang', 'dongqu', 'jiangshi', 'paxing']);
+  assert.deepEqual([...kinds(5, 2)].sort(), ['dianjiang', 'dongqu', 'jiangshi', 'kuangjiang', 'paxing']);
+  assert.equal(kinds(5, 0).has('dianjiang'), false, '一层不应有电僵尸');
+  const dj = worldData.MONSTER_MAP.dianjiang;
+  assert.equal(dj.lv, 30);
+  assert.equal(dj.r, 18);
+  assert.equal(dj.dmg, 24);
+  assert.equal(dj.bolt, true);
+  console.log('骷髅洞/僵尸洞 pool + 电僵尸分布通过');
+});
+
+test('引擎：电僵尸直线闪电——线上命中、线外/背后不命中、冷却内不连发', () => {
+  const eng = createWorlds(worldData);
+  const now = Date.now();
+  const w = eng.getOrCreate(5, 1); // 矿区二层
+  const bolt = [...w.monsters.values()].find((m) => m.kind === 'dianjiang' && !m.boss);
+  assert.ok(bolt, '矿区二层应刷出电僵尸');
+  for (const m of w.monsters.values()) if (m !== bolt) m.dead = true;
+  bolt.x = 0; bolt.y = 0; bolt.atkCd = 0; bolt.aggro = true;
+  // 射程 r×14=252、半宽 r=18：A 线上、D 线宽内应中电；E 垂距 25 刚出线、B 线外、
+  // C 背后、F 超出射程 252 均不应中电。
+  eng.join(w, { playerId: 'A', name: '甲', classId: 'war', level: 1, x: 150, y: 0, hp: 100, maxHp: 100 }, now);
+  eng.join(w, { playerId: 'D', name: '丁', classId: 'war', level: 1, x: 150, y: 10, hp: 100, maxHp: 100 }, now);
+  eng.join(w, { playerId: 'E', name: '戊', classId: 'war', level: 1, x: 150, y: 25, hp: 100, maxHp: 100 }, now);
+  eng.join(w, { playerId: 'B', name: '乙', classId: 'war', level: 1, x: 150, y: 100, hp: 100, maxHp: 100 }, now);
+  eng.join(w, { playerId: 'C', name: '丙', classId: 'war', level: 1, x: -200, y: 0, hp: 100, maxHp: 100 }, now);
+  eng.join(w, { playerId: 'F', name: '己', classId: 'war', level: 1, x: 300, y: 0, hp: 100, maxHp: 100 }, now);
+  w.lastTick = now;
+  eng.tick(w, now + 100);
+  const hits = w.hits.filter((h) => h.attackType === 'bolt');
+  assert.deepEqual(hits.map((h) => h.playerId).sort(), ['A', 'D'], '线上 A 与线宽内 D 应中电，刚出线 E、线外 B、背后 C、超射程 F 不应');
+  assert.ok(hits.every((h) => h.ranged === false && h.dmg > 0 && h.monsterId === bolt.id));
+  // 同步事件里也带 attackType
+  const snap = eng.sync(w, 'A', 150, 0, -1, now + 150);
+  assert.ok(snap.events.some((e) => e.t === 'hit' && e.attackType === 'bolt' && e.monsterId === bolt.id), 'worldSync 事件应带 attackType bolt');
+  // 冷却 1.5s 内再 tick 不连发
+  const n = w.hits.length;
+  w.lastTick = now + 150;
+  eng.tick(w, now + 250);
+  assert.equal(w.hits.length, n, '冷却内不应再放电');
+  // 冷却过后能再放
+  w.lastTick = now + 250;
+  eng.tick(w, now + 1900);
+  assert.ok(w.hits.filter((h) => h.attackType === 'bolt').length > hits.length, '冷却过后应能再放电');
+  console.log('电僵尸直线闪电通过：线上命中、线外/背后不中、冷却 1.5s');
 });
 
 test('引擎：hitMonster 校验——超射程 / 伤害 0 / 每秒 30 次限流', () => {

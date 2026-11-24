@@ -9,8 +9,8 @@
 // 不含 1.76 新增的六大重装密室（地狱烈焰/堕落坟场/深渊魔域/钳虫巢穴/死亡神殿/困惑殿堂），
 // 也不含幻境、圣域、魔龙城等 1.76 之后的内容。
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.potionTotal = exports.MP_POTION_TIERS = exports.HP_POTION_TIERS = exports.POTION_PRICE = exports.ORES = exports.BOSS_DROPS = exports.DROP_PROFILES = exports.BOOK_HIGH_REQ = exports.GRADE_NAMES = exports.DROP_SETS = exports.EQUIP_BY_NAME = exports.EQUIPS = exports.JP_LABEL = exports.POINT_COLOR_NAMES = exports.POINT_COLORS = exports.TIER_NAMES = exports.EMPTY_GEAR = exports.WORN_LABEL = exports.WORN_SLOTS = exports.SLOT_LABEL = exports.SLOT_ORDER = exports.STAGE_MAP = exports.STAGES = exports.MONSTER_MAP = exports.MONSTERS = exports.BAG_GRID_MIN = exports.MAX_ACTIVE_SKILLS = exports.CLASS_SKILLS = exports.SKILLS = exports.skillMpCost = exports.huofuMpCost = exports.shieldBlock = exports.youhuoCount = exports.yemanTargets = exports.banyueSide = exports.cishaIgnoreDef = exports.gongshaAdd = exports.liehuoMul = exports.DODGE_MIN = exports.DODGE_PER_ACC = exports.DODGE_BOSS = exports.DODGE_NORMAL = exports.GONGSHA_ACC_PER_LEVEL = exports.WARRIOR_BASE_ACC = exports.SKILL_ACC_PER_LEVEL = exports.SKILL_XP_PER_LEVEL = exports.BASIC_ATTACKS = exports.CLASS_NAME = exports.HP_ANCHORS = exports.CLASSES = void 0;
-exports.EQUIP_MAX_DUR = exports.MAP_MONSTER_COUNT = exports.MONSTER_XP_MUL = exports.WORLD_HALF = exports.ENH_MAX = void 0;
+exports.ORES = exports.BOSS_DROPS = exports.DROP_PROFILES = exports.BOOK_HIGH_REQ = exports.GRADE_NAMES = exports.DROP_SETS = exports.EQUIP_BY_NAME = exports.EQUIPS = exports.JP_LABEL = exports.POINT_COLOR_NAMES = exports.POINT_COLORS = exports.TIER_NAMES = exports.EMPTY_GEAR = exports.WORN_LABEL = exports.WORN_SLOTS = exports.SLOT_LABEL = exports.SLOT_ORDER = exports.STAGE_MAP = exports.STAGES = exports.MONSTER_MAP = exports.MONSTERS = exports.boltHalfWidthOf = exports.boltReachOf = exports.BOLT_HALF_WIDTH_MUL = exports.BOLT_REACH_MUL = exports.BAG_GRID_MIN = exports.MAX_ACTIVE_SKILLS = exports.CLASS_SKILLS = exports.SKILLS = exports.skillMpCost = exports.huofuMpCost = exports.shieldBlock = exports.youhuoCount = exports.yemanTargets = exports.banyueSide = exports.cishaIgnoreDef = exports.gongshaAdd = exports.liehuoMul = exports.DODGE_MIN = exports.DODGE_PER_ACC = exports.DODGE_BOSS = exports.DODGE_NORMAL = exports.GONGSHA_ACC_PER_LEVEL = exports.WARRIOR_BASE_ACC = exports.SKILL_ACC_PER_LEVEL = exports.SKILL_XP_PER_LEVEL = exports.BASIC_ATTACKS = exports.CLASS_NAME = exports.HP_ANCHORS = exports.CLASSES = void 0;
+exports.EQUIP_MAX_DUR = exports.MAP_MONSTER_COUNT = exports.MONSTER_XP_MUL = exports.WORLD_HALF = exports.ENH_MAX = exports.potionTotal = exports.MP_POTION_TIERS = exports.HP_POTION_TIERS = exports.POTION_PRICE = void 0;
 exports.hpAtLevel = hpAtLevel;
 exports.basicAttackOf = basicAttackOf;
 exports.bookSellPrice = bookSellPrice;
@@ -235,7 +235,17 @@ exports.CLASS_SKILLS = {
 exports.MAX_ACTIVE_SKILLS = 2;
 // 背包无容量上限：装备、技能书想装多少装多少。此常量只是格子盘最少画出的格子数，东西多了格子盘自动变长。
 exports.BAG_GRID_MIN = 24;
-const M = (key, lv, emoji, name, hp, spd, dmg, xp, r, color, range = 0) => ({ key, lv, emoji, name, hp, spd, dmg, xp, r, color, range });
+const M = (key, lv, emoji, name, hp, spd, dmg, xp, r, color, range = 0, bolt = false) => ({ key, lv, emoji, name, hp, spd, dmg, xp, r, color, range, ...(bolt ? { bolt: true } : {}) });
+/* 电僵尸的闪电（2026-11-24 按用户要求：「攻击距离 5 个身位」）：射程与宽度都按怪的
+ * 体型（半径 r）换算、不写死与体型无关的数——射程 = r×14（电僵尸 r=18 → 252px，
+ * 约 5 个身位量级）；电线半宽 = r（整条线宽 2r ≈ 1 个身位）。放电冷却与远程怪同档 1.5 秒。
+ * 判定：放电那一刻，处在它面朝方向这条带内的玩家全部受伤（直线范围伤害），线外不受影响。 */
+exports.BOLT_REACH_MUL = 14;
+exports.BOLT_HALF_WIDTH_MUL = 1;
+const boltReachOf = (r) => r * exports.BOLT_REACH_MUL;
+exports.boltReachOf = boltReachOf;
+const boltHalfWidthOf = (r) => r * exports.BOLT_HALF_WIDTH_MUL;
+exports.boltHalfWidthOf = boltHalfWidthOf;
 exports.MONSTERS = [
     M("ji", 5, "🐔", "鸡", 5, 52, 4, 5, 13, "#e8e0cc"),
     M("lu", 12, "🦌", "鹿", 15, 66, 5, 15, 14, "#b08954"),
@@ -259,6 +269,10 @@ exports.MONSTERS = [
     M("paxing", 22, "🧟", "爬行僵尸", 165, 64, 17, 5, 16, "#667d52"),
     M("kuangjiang", 25, "⛏️", "矿洞僵尸", 225, 54, 19, 6, 17, "#6b6f66"),
     M("tiejiang", 28, "⛓️", "铁链僵尸", 285, 52, 22, 7, 18, "#59524a"),
+    // 电僵尸（2026-11-24 按用户要求新增）：原版僵尸洞的怪，只放僵尸洞二、三层深层。数值按
+    // 僵尸洞同档给（铁链僵尸 28 级/血 285 为参照）：30 级、血 320、伤害 24，比铁链僵尸略强一档；
+    // 攻击方式是面前放电（bolt=true，射程/宽度按体型换算，见 BOLT_* 常量），掉落走僵尸洞普通怪档。
+    M("dianjiang", 30, "⚡", "电僵尸", 320, 50, 24, 200, 18, "#5b7fe0", 0, true),
     M("bsys", 25, "🪓", "半兽勇士", 300, 68, 18, 6, 17, "#6d8a3e"),
     M("jiaoying", 30, "🦟", "角蝇", 200, 108, 27, 300, 14, "#7a6a4f"),
     M("hongye", 32, "🐗", "红野猪", 330, 88, 30, 320, 18, "#a34a3a"),
@@ -333,6 +347,11 @@ exports.MONSTERS = [
 ];
 exports.MONSTER_MAP = Object.fromEntries(exports.MONSTERS.map((m) => [m.key, m]));
 const B = (name, emoji, lv, hp, spd, dmg, xp, r, gold, color) => ({ name, emoji, lv, hp, spd, dmg, xp, r, gold, color });
+/** 无 Boss 占位（2026-11-24 按用户要求：多层地图只保留最后一层有 Boss，其余层 Boss 置空；
+ * 安全区地图同样用它）：name 为空即「本层没有 Boss」——客户端 spawnBoss 与服务端
+ * spawnInitial 都按 boss.name 为空跳过刷 Boss，地图图鉴显示「无 Boss」；下潜入口不要求
+ * 杀 Boss（走入口即可），通关只记在最后一层 Boss 身上，不会卡关。 */
+const NO_BOSS = B("", "", 0, 0, 0, 0, 0, 0, 0, "#000000");
 exports.STAGES = [
     {
         id: 1, name: "新手村", full: "地图一 · 新手村", face: "🏡", mine: false,
@@ -351,20 +370,28 @@ exports.STAGES = [
         clearLine: "边界村守住了，村民们又能安心下地了",
         layers: [{
                 name: "边界村", label: "边界村 · 村外田野", ground: "#24301c",
+                // 小怪与新手村完全一样（2026-11-24 按用户要求）：同 6 种、同顺序、同怪定义与层倍率，
+                // 地图列表里两张图的小怪行显示一致；总数保持 220 只（按本图容量，随机刷怪自动均分到 6 种）；
+                // Boss 仍是多钩猫王、不算小怪，不动。
                 pool: ["lu", "ji", "dingpa", "daocao", "duogou", "duzhu"],
-                killTarget: 120, hpMul: 0.9, dmgMul: 0.95, monsterCount: 220,
+                killTarget: 120, hpMul: 1, dmgMul: 1, monsterCount: 220,
                 boss: B("多钩猫王", "🐱", 10, 2600, 76, 30, 70, 34, 180, "#8a8f98"),
             }],
     },
     {
         id: 19, name: "比奇野外", full: "地图三 · 比奇野外", face: "🌾", mine: false,
-        desc: "比奇城周边的野外：稻草人在田边，半兽人成群游荡，钉耙猫、毒蜘蛛藏在草丛里，多钩猫在林边窜动。毒蜘蛛王是这片野外最强的怪物，击败它才算把比奇城外清理干净；野外东边就是沃玛森林。",
+        desc: "比奇城周边的野外：稻草人在田边，半兽人成群游荡，钉耙猫、多钩猫在林边窜动，毒蜘蛛藏在草丛里。毒蜘蛛王是这片野外最强的怪物，击败它才算把比奇城外清理干净；野外东边就是沃玛森林。",
         clearLine: "比奇野外清理干净了，沃玛森林就在东边",
         layers: [{
                 name: "比奇野外", label: "比奇城 · 城外野外", ground: "#22301a",
+                // 小怪与 Boss 按用户要求调整（2026-11-24）：删鹿、食人花、森林雪人，加多钩猫（复用已有
+                // 多钩猫定义），剩 5 种——稻草人/半兽人/钉耙猫/毒蜘蛛/多钩猫；总数保持 340 只随机均分。
+                // Boss 由半兽勇士换成新 Boss 毒蜘蛛王：按毒蜘蛛往上做的王，档位对齐原 Boss
+                // （25 级 / 血 9000 / 经验 160 / 金币 380），速度按蜘蛛底子略快、伤害略低半点，
+                // 体型 r=42 比普通毒蜘蛛大一圈；外观走蜘蛛造型 + Boss 通用金冠、主色改深绛紫与普通毒蜘蛛区分。
                 pool: ["daocao", "banshou", "dingpa", "duzhu", "duogou"],
                 killTarget: 160, hpMul: 1.3, dmgMul: 1.1, monsterCount: 340,
-                boss: B("毒蜘蛛王", "🕷️", 25, 9000, 80, 52, 160, 40, 380, "#c9a227"),
+                boss: B("毒蜘蛛王", "🕷️", 25, 9000, 74, 50, 160, 42, 380, "#7d2e4e"),
             }],
     },
     {
@@ -373,6 +400,8 @@ exports.STAGES = [
         clearLine: "沃玛森林杀穿了，通往毒蛇山谷的山道就在前方",
         layers: [{
                 name: "沃玛森林", label: "沃玛森林 · 林间大道", ground: "#1f3018",
+                // 小怪按用户要求删减（2026-11-24）：删多钩猫、钉耙猫、沃玛战士，剩 4 种——
+                // 雪人/半兽人/半兽战士/半兽勇士；总数保持 380 只随机均分；Boss 半兽统领不动。
                 pool: ["xueren", "banshou", "banshouzhan", "bsys"],
                 killTarget: 200, hpMul: 1.6, dmgMul: 1.25, monsterCount: 380,
                 boss: B("半兽统领", "👹", 28, 14400, 68, 64, 220, 42, 520, "#7d9b4e"),
@@ -380,8 +409,8 @@ exports.STAGES = [
     },
     {
         id: 3, name: "毒蛇山谷", full: "地图五 · 毒蛇山谷", face: "🐍", mine: false,
-        desc: "连接比奇与盟重的山谷：红蛇、虎蛇在谷里游走，毒蜘蛛守着谷口，蛇王盘踞谷底。谷里有两个入口：一个是毒蛇矿区的入口（僵尸洞穴），另一个北行通往盟重野外——蜈蚣洞、石墓、祖玛寺庙、白日门的入口都在盟重土城那一带。",
-        clearLine: "毒蛇山谷杀穿了，通往盟重野外的路打通了",
+        desc: "连接比奇与盟重的山谷：红蛇、虎蛇在谷里游走，毒蜘蛛守着谷口，蛇王盘踞谷底。谷里有两个入口：一个是毒蛇矿区的入口（僵尸洞穴），另一个北行通往盟重土城——蜈蚣洞、石墓、祖玛寺庙、白日门的入口都在盟重土城里。",
+        clearLine: "毒蛇山谷杀穿了，通往盟重土城的路打通了",
         layers: [{
                 name: "毒蛇山谷", label: "毒蛇山谷 · 蛇道", ground: "#243118",
                 pool: ["hongshe", "hushe", "duzhu", "dushe"],
@@ -390,14 +419,20 @@ exports.STAGES = [
             }],
     },
     {
-        id: 21, name: "盟重野外", full: "地图六 · 盟重野外", face: "🏜️", mine: false,
-        desc: "盟重土城周边的沙漠野外：黑色恶蛆在沙里钻动，楔蛾会麻痹人，角蝇成群嗡嗡作响，毒蜘蛛藏在枯石后。土城相连的洞穴入口都分布在这一带——西北是死亡山谷（蜈蚣洞），土城边上是石墓，祖玛寺庙与白日门的入口也在这里，走到哪个入口就进哪张图。角蝇王是这片沙漠最强的怪物，击败它才算通关。",
-        clearLine: "盟重野外清理干净了，几座洞穴的入口都找到了",
+        // 盟重土城（2026-11-24 按用户要求合并）：原地图六「盟重野外」改为盟重土城并设为安全区——
+        // 整图不刷怪、没有 Boss、玩家不受伤害（用户两次强调「盟重不刷怪物」：小怪池为空、
+        // Boss 置空、monsterCount=0，客户端与服务端都不会在这张图刷任何怪）；原地图十的
+        // 盟重土城（id 22）已删除，它的位置与功能由本图承接（入口连接见 App.tsx MAP_LINKS[21]，
+        // 沃玛寺庙大殿的入口也改到本图）。角蝇王随野外一并去掉、不设替代 Boss。
+        id: 21, name: "盟重土城", full: "地图六 · 盟重土城", face: "🏜️", mine: false, safe: true,
+        desc: "盟重省的土城，玛法大陆的第二座城池：毒蛇山谷北行就到，沃玛寺庙大殿里的入口也直通这里。整座城都是安全区：不刷怪、没有 Boss、在城里不会受到伤害。城里立着通往后面地图的入口——死亡山谷（蜈蚣洞）、石墓、祖玛寺庙、白日门都在城里，走到哪个入口就直接进哪张图；回比奇城找传送员也能传送过来。安顿、整备、出发，都从这里走。",
+        clearLine: "",
         layers: [{
-                name: "盟重野外", label: "盟重省 · 土城周边沙漠", ground: "#2e2416",
-                pool: ["heie", "xiee", "jiaoying", "duzhu"],
-                killTarget: 200, hpMul: 8.0, dmgMul: 2.8, monsterCount: 360,
-                boss: B("角蝇王", "🦟", 45, 60000, 92, 200, 800, 46, 2400, "#7a6a4f"),
+                name: "盟重土城", label: "盟重省 · 土城（安全区）", ground: "#2e2416",
+                pool: [],
+                killTarget: 1, hpMul: 1, dmgMul: 1,
+                worldHalf: 900, monsterCount: 0,
+                boss: NO_BOSS,
             }],
     },
     {
@@ -409,17 +444,17 @@ exports.STAGES = [
                 name: "骷髅洞一层", label: "半兽人古墓 · 一层", ground: "#1d1a24",
                 pool: ["kulou", "dongqu", "xiezi", "kuloujiang", "toufu", "shandong", "banshou"],
                 killTarget: 120, hpMul: 3.0, dmgMul: 1.7, monsterCount: 260,
-                boss: B("骷髅战将王", "💀", 40, 30000, 70, 100, 400, 44, 900, "#cfc39f"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：一层骷髅战将王删除
             },
             {
                 name: "骷髅洞二层", label: "半兽人古墓 · 二层", ground: "#1a1622",
                 pool: ["kulou", "dongqu", "xiezi", "toufu", "banshou", "kuloujiang"],
                 killTarget: 120, hpMul: 3.6, dmgMul: 1.85, monsterCount: 260,
-                boss: B("骷髅战将王", "💀", 44, 40000, 70, 112, 500, 44, 1200, "#cfc39f"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：二层骷髅战将王删除
             },
             {
                 name: "骷髅洞三层", label: "半兽人古墓 · 三层", ground: "#171320",
-                pool: ["kuloujiang", "kulou", "xiezi", "dongqu", "toufu", "banshouzhan"],
+                pool: ["kuloujiang", "kulou", "xiezi", "dongqu", "toufu"], // 删半兽战士（2026-11-24 按用户要求）：三层剩 5 种，总数 240 不变、随机均分
                 killTarget: 120, hpMul: 4.2, dmgMul: 2.0, monsterCount: 240,
                 boss: B("骷髅精灵", "💀", 25, 350, 74, 125, 600, 46, 1500, "#e8e2cc"),
             },
@@ -427,26 +462,30 @@ exports.STAGES = [
     },
     {
         id: 5, name: "僵尸洞穴", full: "地图八 · 僵尸洞穴", face: "⛏️", mine: true,
-        desc: "分四层：矿区一层 → 矿区二层 → 矿区三层 → 尸王殿。三层通往尸王殿的不是门，而是地上的一个洞口 🕳️——一只穿黄衣服的僵尸正从洞里往外爬，钻进洞里就到尸王殿。尸王殿只有手机一屏大小、只刷尸王：每小时刷新一次，一次按格子刷满全殿（只留入口四个格子的位置落脚），尸王主要爆技能书，但 25 级以上的高级书极难爆。僵尸在矿道里游荡，金色矿脉散布各层，走近停留即可挖矿，越深矿越好。尸王殿击败尸王才算通关。",
+        desc: "分四层：矿区一层 → 矿区二层 → 矿区三层 → 尸王殿。三层通往尸王殿的不是门，而是地上的一个洞口 🕳️——一只穿黄衣服的僵尸正从洞里往外爬，钻进洞里就到尸王殿。尸王殿只有手机一屏大小、只刷尸王：每小时刷新一次，一次按格子刷满全殿（只留入口四个格子的位置落脚），尸王主要爆技能书，但 25 级以上的高级书极难爆。僵尸在矿道里游荡，二、三层深处还有电僵尸：它不贴身砍人，而是停在几步外朝面前放出一道长长的电，站在电线上的都会被电到——别站在它正前方。金色矿脉散布各层，走近停留即可挖矿，越深矿越好。尸王殿击败尸王才算通关。",
         clearLine: "尸王倒下了，矿区重见天日",
         layers: [
             {
                 name: "矿区一层", label: "比奇矿区 · 一层", ground: "#201a14",
-                pool: ["jiangshi", "paxing", "kuangjiang", "tiejiang", "dongqu", "xiezi"],
+                // 一层小怪删蝎子与铁链僵尸（2026-11-24 按用户要求）：剩僵尸/爬行/矿僵/洞蛆 4 种，总数 300 不变、随机均分
+                pool: ["jiangshi", "paxing", "kuangjiang", "dongqu"],
                 killTarget: 140, hpMul: 5.0, dmgMul: 2.15, monsterCount: 300,
-                boss: B("铁链僵尸王", "⛓️", 50, 55000, 56, 140, 650, 46, 1600, "#59524a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：一层铁链僵尸王删除
             },
             {
                 name: "矿区二层", label: "比奇矿区 · 二层", ground: "#1d1712",
-                pool: ["jiangshi", "dongqu", "paxing", "xiezi"],
+                // 二层小怪删蝎子（2026-11-24 按用户要求）、加电僵尸（同日新增：面前放电的直线攻击怪，只放二、三层深层）：
+                // 剩僵尸/洞蛆/爬行/电僵尸 4 种，总数 280 不变、随机均分
+                pool: ["jiangshi", "dongqu", "paxing", "dianjiang"],
                 killTarget: 140, hpMul: 5.6, dmgMul: 2.3, monsterCount: 280,
-                boss: B("铁链僵尸王", "⛓️", 53, 64000, 56, 152, 750, 46, 1800, "#59524a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：二层铁链僵尸王删除
             },
             {
                 name: "矿区三层", label: "比奇矿区 · 三层", ground: "#1a140f",
-                pool: ["paxing", "jiangshi", "kuangjiang", "dongqu"],
+                // 三层加电僵尸（2026-11-24 新增，同二层）：剩爬行/僵尸/矿僵/洞蛆/电僵尸 5 种，总数 260 不变、随机均分
+                pool: ["paxing", "jiangshi", "kuangjiang", "dongqu", "dianjiang"],
                 killTarget: 140, hpMul: 6.2, dmgMul: 2.45, monsterCount: 260,
-                boss: B("矿洞僵尸王", "⛏️", 55, 70000, 58, 160, 820, 47, 2000, "#6b6f66"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：三层矿洞僵尸王删除
             },
             {
                 // 尸王殿（2026-11-19 按用户要求）：地图缩小到只有手机一屏大小（worldHalf=300，世界 600×600，
@@ -476,13 +515,13 @@ exports.STAGES = [
                 name: "沃玛寺庙一层", label: "沃玛寺庙 · 一层", ground: "#231a20",
                 pool: ["woma-zhanshi", "woma-yongshi", "anhei"],
                 killTarget: 200, hpMul: 10.5, dmgMul: 3.9, monsterCount: 300,
-                boss: B("沃玛卫士", "🛡️", 50, 1000, 78, 255, 260, 50, 4600, "#a8763e"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：一层沃玛卫士删除
             },
             {
                 name: "沃玛寺庙二层", label: "沃玛寺庙 · 二层", ground: "#20161e",
                 pool: ["woma-yongshi", "woma-zhanjiang", "woma-weishi"],
                 killTarget: 200, hpMul: 11.5, dmgMul: 4.05, monsterCount: 300,
-                boss: B("沃玛卫士", "🛡️", 50, 1000, 78, 268, 260, 50, 5000, "#a8763e"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：二层沃玛卫士删除
             },
             {
                 // 沃玛大殿（2026-11-19 按用户要求）：原第三层改名沃玛大殿，地图缩小一倍——
@@ -496,21 +535,6 @@ exports.STAGES = [
         ],
     },
     {
-        // 盟重土城（2026-11-20 按用户要求新增）：沃玛寺庙后面的安全区枢纽城——整座城不刷怪、
-        // 没有 Boss、玩家不受伤害；城里立着通往后面地图的入口（蜈蚣洞/石墓/祖玛寺庙/白日门，
-        // 见 App.tsx 的 MAP_LINKS[22]），走到哪个入口就直接进哪张图。进城即记通关（见 startBattle）。
-        id: 22, name: "盟重土城", full: "地图十 · 盟重土城", face: "🏜️", mine: false, safe: true,
-        desc: "盟重省的土城，玛法大陆的第二座城池，就建在沃玛寺庙后面，整座城都是安全区：不刷怪、没有 Boss、在城里不会受到伤害。城里立着通往后面地图的入口——死亡山谷（蜈蚣洞）、石墓、祖玛寺庙、白日门都在城里，走到哪个入口就直接进哪张图；回比奇城找传送员也能传送过来。安顿、整备、出发，都从这里走。",
-        clearLine: "",
-        layers: [{
-                name: "盟重土城", label: "盟重省 · 土城（安全区）", ground: "#2e2416",
-                pool: [],
-                killTarget: 1, hpMul: 1, dmgMul: 1,
-                worldHalf: 900, monsterCount: 0,
-                boss: B("", "🏯", 1, 1, 0, 0, 0, 0, 0, "#000000"),
-            }],
-    },
-    {
         id: 8, name: "蜈蚣洞", full: "地图十一 · 蜈蚣洞", face: "🐛", mine: false,
         desc: "盟重西北的死亡山谷（蜈蚣洞）：原版不是简单的 1–5 层，而是网状分支——地牢一层东/西分叉，经黑暗地带、一线天通向死亡棺材。本作按原版分支编排为五段：地牢一层东 → 地牢一层西 → 黑暗地带 → 一线天 → 死亡棺材。地牢一层东还有一条连接通道，通往单独设立的隐藏地图未知暗殿（不在关卡列表里，通道随时可走）。蜈蚣、钳虫、黑色恶蛆、跳跳蜂在洞里乱窜，楔蛾会麻痹人，巨型蠕虫盘踞深处。死亡棺材击败触龙神才算通关——它魔御极高，法师要格外小心。",
         clearLine: "触龙神倒下了，死亡棺材重归寂静",
@@ -519,25 +543,25 @@ exports.STAGES = [
                 name: "地牢一层东", label: "蜈蚣洞 · 地牢一层东", ground: "#1c1c14",
                 pool: ["wugong", "tiaotiao", "heie", "duzhu"],
                 killTarget: 180, hpMul: 13.5, dmgMul: 4.35, monsterCount: 280,
-                boss: B("邪恶钳虫", "🦂", 60, 1000, 72, 295, 2200, 50, 5800, "#7a5a2b"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：地牢一层东邪恶钳虫删除
             },
             {
                 name: "地牢一层西", label: "蜈蚣洞 · 地牢一层西", ground: "#1a1a12",
                 pool: ["qianchong", "wugong", "xiee"],
                 killTarget: 180, hpMul: 14.0, dmgMul: 4.42, monsterCount: 280,
-                boss: B("邪恶钳虫", "🦂", 60, 1000, 72, 302, 2250, 50, 5950, "#7a5a2b"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：地牢一层西邪恶钳虫删除
             },
             {
                 name: "黑暗地带", label: "蜈蚣洞 · 黑暗地带", ground: "#191910",
                 pool: ["qianchong", "wugong", "xiee", "jiaoying"],
                 killTarget: 180, hpMul: 14.5, dmgMul: 4.5, monsterCount: 260,
-                boss: B("邪恶钳虫", "🦂", 60, 1000, 72, 308, 2300, 50, 6100, "#7a5a2b"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：黑暗地带邪恶钳虫删除
             },
             {
                 name: "一线天", label: "蜈蚣洞 · 一线天", ground: "#17150e",
                 pool: ["qianchong", "juxing-worm", "heie", "xiee"],
                 killTarget: 180, hpMul: 15.0, dmgMul: 4.58, monsterCount: 240,
-                boss: B("邪恶钳虫", "🦂", 60, 1000, 72, 312, 2350, 50, 6250, "#7a5a2b"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：一线天邪恶钳虫删除
             },
             {
                 name: "死亡棺材", label: "蜈蚣洞 · 死亡棺材", ground: "#15130c",
@@ -560,56 +584,56 @@ exports.STAGES = [
     },
     {
         id: 6, name: "石墓", full: "地图十三 · 石墓", face: "🐗", mine: false,
-        desc: "从盟重土城（或盟重野外）的入口进石墓，分七层外加石墓阵与桃源之门：石墓一层 → 二层 → 三层 → 四层 → 五层 → 石墓阵（五层与六层之间的独立迷宫，不是第六层本身）→ 六层 → 七层，逐层走入口下潜，七层击败石墓尸王后，踩它钻出的洞口还能进桃源之门（俗称石墓八层）。只刷猪洞本地怪：红野猪、黑野猪、蝎蛇、角蝇、白野猪、邪恶毒蛇；桃源之门里有月魔蜘蛛出没。（桃源之门里的困惑殿堂是 1.76 重装密室，不在本作范围。）",
-        clearLine: "石墓尸王倒下了，猪洞七层被你杀穿了",
+        desc: "从盟重土城的入口进石墓，分七层外加石墓阵与桃源之门：石墓一层 → 二层 → 三层 → 四层 → 五层 → 石墓阵（五层与六层之间的独立迷宫，不是第六层本身）→ 六层 → 七层，逐层走入口下潜，最深处是桃源之门（俗称石墓八层），击败桃源之门的白野猪王才算通关。只刷猪洞本地怪：红野猪、黑野猪、蝎蛇、角蝇、白野猪、邪恶毒蛇；桃源之门里有月魔蜘蛛出没。（桃源之门里的困惑殿堂是 1.76 重装密室，不在本作范围。）",
+        clearLine: "桃源之门的白野猪王倒下了，猪洞被你杀穿了",
         layers: [
             {
                 name: "石墓一层", label: "石墓 · 一层墓道", ground: "#241c16",
                 pool: ["hongye", "heie", "jiaoying", "xieshe"],
                 killTarget: 160, hpMul: 17.0, dmgMul: 4.85, monsterCount: 300,
-                boss: B("红野猪王", "🐗", 60, 90000, 80, 340, 1100, 48, 2600, "#a34a3a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：一层红野猪王删除
             },
             {
                 name: "石墓二层", label: "石墓 · 二层墓道", ground: "#221a14",
                 pool: ["heiye", "hongye", "heie", "jiaoying"],
                 killTarget: 170, hpMul: 17.5, dmgMul: 4.92, monsterCount: 300,
-                boss: B("黑野猪王", "🐗", 62, 100000, 82, 352, 1200, 48, 2900, "#3d3a38"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：二层黑野猪王删除
             },
             {
                 name: "石墓三层", label: "石墓 · 三层墓道", ground: "#201812",
                 pool: ["xieshe", "heiye", "hongye", "jiaoying", "heie"],
                 killTarget: 180, hpMul: 18.0, dmgMul: 5.0, monsterCount: 320,
-                boss: B("蝎蛇王", "🦎", 64, 110000, 80, 364, 1300, 49, 3200, "#7d8a3a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：三层蝎蛇王删除
             },
             {
                 name: "石墓四层", label: "石墓 · 四层墓道", ground: "#1f1611",
                 pool: ["baiye", "heiye", "heie", "xieshe"],
                 killTarget: 180, hpMul: 18.5, dmgMul: 5.08, monsterCount: 320,
-                boss: B("白野猪王", "🐗", 66, 120000, 84, 376, 1400, 49, 3500, "#e3ddd2"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：四层白野猪王删除（桃源之门的保留）
             },
             {
                 name: "石墓五层", label: "石墓 · 五层墓道", ground: "#1d1510",
                 pool: ["baiye", "hongye", "heiye", "xieshe", "jiaoying", "heie"],
                 killTarget: 190, hpMul: 19.0, dmgMul: 5.15, monsterCount: 340,
-                boss: B("白野猪王", "🐗", 68, 130000, 84, 388, 1500, 50, 3800, "#e3ddd2"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：五层白野猪王删除（桃源之门的保留）
             },
             {
                 name: "石墓阵", label: "石墓 · 石墓阵（迷宫）", ground: "#1c1410",
                 pool: ["baiye", "hongye", "heiye", "xieshe", "jiaoying"],
                 killTarget: 190, hpMul: 19.4, dmgMul: 5.2, monsterCount: 260,
-                boss: B("白野猪王", "🐗", 68, 135000, 84, 396, 1550, 50, 3900, "#e3ddd2"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：石墓阵白野猪王删除（桃源之门的保留）
             },
             {
                 name: "石墓六层", label: "石墓 · 六层墓道", ground: "#1b130e",
                 pool: ["xiedu", "baiye", "xieshe", "heiye"],
                 killTarget: 200, hpMul: 19.8, dmgMul: 5.28, monsterCount: 320,
-                boss: B("邪恶毒蛇", "🐍", 50, 1100, 86, 404, 1550, 50, 4000, "#4a7d3a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：六层邪恶毒蛇（Boss 位）删除，小怪池里的邪恶毒蛇不动
             },
             {
                 name: "石墓七层", label: "石墓 · 七层 · 尸王座", ground: "#18100c",
                 pool: ["baiye", "xiedu", "heiye", "xieshe"],
                 killTarget: 200, hpMul: 20.2, dmgMul: 5.35, monsterCount: 340,
-                boss: B("石墓尸王", "👑", 55, 5000, 64, 416, 1600, 50, 4200, "#8a2f2a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：七层石墓尸王删除——按规则它不再在任何地方刷出
             },
             {
                 name: "桃源之门", label: "石墓 · 桃源之门（石墓八层）", ground: "#1a1418",
@@ -628,43 +652,43 @@ exports.STAGES = [
                 name: "祖玛寺庙一层", label: "祖玛寺庙 · 一层", ground: "#201d16",
                 pool: ["zuma-gong", "dalaoshu", "xiee", "jiaoying", "heie"],
                 killTarget: 200, hpMul: 21.0, dmgMul: 5.45, monsterCount: 320,
-                boss: B("祖玛卫士", "🗿", 43, 495, 66, 430, 370, 50, 6600, "#7a6a4a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：祖玛卫士删除（教主之家祖玛教主保留）
             },
             {
                 name: "祖玛寺庙二层", label: "祖玛寺庙 · 二层", ground: "#1f1c15",
                 pool: ["zuma-gong", "zuma-diao", "dalaoshu"],
                 killTarget: 200, hpMul: 21.4, dmgMul: 5.5, monsterCount: 320,
-                boss: B("祖玛卫士", "🗿", 43, 495, 66, 438, 370, 50, 6700, "#7a6a4a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：祖玛卫士删除（教主之家祖玛教主保留）
             },
             {
                 name: "祖玛寺庙三层", label: "祖玛寺庙 · 三层", ground: "#1e1b14",
                 pool: ["zuma-diao", "zuma-gong", "xiee"],
                 killTarget: 200, hpMul: 21.8, dmgMul: 5.55, monsterCount: 340,
-                boss: B("祖玛卫士", "🗿", 43, 495, 66, 446, 370, 50, 6800, "#7a6a4a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：祖玛卫士删除（教主之家祖玛教主保留）
             },
             {
                 name: "祖玛寺庙四层", label: "祖玛寺庙 · 四层", ground: "#1d1a13",
                 pool: ["zuma-diao", "zuma-wei", "dalaoshu"],
                 killTarget: 200, hpMul: 22.2, dmgMul: 5.6, monsterCount: 340,
-                boss: B("祖玛卫士", "🗿", 43, 495, 66, 454, 370, 50, 6900, "#7a6a4a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：祖玛卫士删除（教主之家祖玛教主保留）
             },
             {
                 name: "祖玛寺庙五层", label: "祖玛寺庙 · 五层", ground: "#1c1912",
                 pool: ["zuma-wei", "zuma-diao", "zuma-gong"],
                 killTarget: 200, hpMul: 22.6, dmgMul: 5.65, monsterCount: 360,
-                boss: B("祖玛卫士", "🗿", 43, 495, 66, 462, 370, 50, 7000, "#7a6a4a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：祖玛卫士删除（教主之家祖玛教主保留）
             },
             {
                 name: "祖玛阁", label: "祖玛寺庙 · 祖玛阁（第六层迷宫）", ground: "#1b1811",
                 pool: ["zuma-diao", "zuma-gong", "dalaoshu"],
                 killTarget: 200, hpMul: 23.0, dmgMul: 5.7, monsterCount: 260,
-                boss: B("祖玛卫士", "🗿", 43, 495, 66, 470, 370, 50, 7100, "#7a6a4a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：祖玛卫士删除（教主之家祖玛教主保留）
             },
             {
                 name: "祖玛寺庙七层", label: "祖玛寺庙 · 七层", ground: "#1a1710",
                 pool: ["zuma-wei", "zuma-diao", "zuma-gong", "xiee"],
                 killTarget: 200, hpMul: 23.4, dmgMul: 5.75, monsterCount: 340,
-                boss: B("祖玛卫士", "🗿", 43, 495, 66, 478, 370, 50, 7200, "#7a6a4a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：祖玛卫士删除（教主之家祖玛教主保留）
             },
             {
                 name: "教主之家", label: "祖玛寺庙 · 教主之家", ground: "#191510",
@@ -683,7 +707,7 @@ exports.STAGES = [
                 name: "白日门野外", label: "白日门 · 中央城池（安全区）与丛林野外", ground: "#22301a",
                 pool: ["xuejiang", "xuejuren", "tianlang", "bsys"],
                 killTarget: 200, hpMul: 27.5, dmgMul: 6.4, monsterCount: 340,
-                boss: B("血巨人", "👹", 55, 160000, 64, 610, 2600, 50, 9000, "#9a4a3a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：白日门野外血巨人删除（小怪池里的血巨人不动）
             },
             {
                 name: "丛林迷宫", label: "白日门 · 丛林迷宫", ground: "#1e2c16",
@@ -702,37 +726,37 @@ exports.STAGES = [
                 name: "赤月峡谷入口", label: "赤月峡谷 · 东/南/北入口", ground: "#241016",
                 pool: ["tianlang", "judu", "baoya", "yuemo"],
                 killTarget: 200, hpMul: 28.5, dmgMul: 6.55, monsterCount: 260,
-                boss: B("血巨人", "👹", 55, 190000, 64, 630, 3000, 52, 11000, "#9a4a3a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：入口血巨人删除（赤月魔穴赤月恶魔保留）
             },
             {
                 name: "赤月峡谷广场", label: "赤月峡谷 · 广场", ground: "#22101a",
                 pool: ["gangya", "hee", "xuejiang", "xuejuren"],
                 killTarget: 200, hpMul: 29.0, dmgMul: 6.6, monsterCount: 280,
-                boss: B("血僵尸", "🧟", 55, 200000, 60, 640, 3200, 52, 11500, "#8a3a3a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：广场血僵尸删除（赤月魔穴赤月恶魔保留）
             },
             {
                 name: "回廊", label: "赤月峡谷 · 左/右回廊", ground: "#20101a",
                 pool: ["huawen", "huanying", "hee", "xuejuren"],
                 killTarget: 200, hpMul: 29.5, dmgMul: 6.65, monsterCount: 240,
-                boss: B("邪恶巨人", "👹", 54, 210000, 62, 650, 3400, 54, 12000, "#6a3a5a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：回廊邪恶巨人删除（赤月魔穴赤月恶魔保留）
             },
             {
                 name: "抉择之地", label: "赤月峡谷 · 抉择之地", ground: "#1f1016",
                 pool: ["xuejiang", "xuejuren", "yuemo", "hee"],
                 killTarget: 200, hpMul: 30.0, dmgMul: 6.7, monsterCount: 280,
-                boss: B("双头金刚", "🦍", 50, 5000, 72, 660, 4600, 54, 12400, "#7a5a3a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：抉择之地双头金刚删除（赤月魔穴赤月恶魔保留）
             },
             {
                 name: "山谷密道", label: "赤月峡谷 · 山谷密道", ground: "#1e0e14",
                 pool: ["gangya", "huawen", "yuemo"],
                 killTarget: 200, hpMul: 30.3, dmgMul: 6.75, monsterCount: 220,
-                boss: B("邪恶巨人", "👹", 54, 220000, 62, 670, 3600, 54, 12800, "#6a3a5a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：山谷密道邪恶巨人删除（赤月魔穴赤月恶魔保留）
             },
             {
                 name: "恶魔祭坛", label: "赤月峡谷 · 恶魔祭坛", ground: "#1d0c14",
                 pool: ["gangya", "hee", "huanying", "huawen", "xuejiang"],
                 killTarget: 200, hpMul: 30.6, dmgMul: 6.8, monsterCount: 240,
-                boss: B("双头血魔", "👹", 55, 5000, 74, 680, 4900, 54, 13200, "#8a2f2a"),
+                boss: NO_BOSS, // 多层地图只留最后一层 Boss（2026-11-24）：恶魔祭坛双头血魔删除（赤月魔穴赤月恶魔保留）
             },
             {
                 name: "赤月魔穴", label: "赤月峡谷 · 赤月魔穴（单屏小图）", ground: "#1c0c14",
@@ -1200,7 +1224,7 @@ exports.BOSS_DROPS = {
     "半兽统领": { guaranteed: ["low"], rolls: [{ set: "low", chance: 0.4 }] },
     "多钩猫王": { guaranteed: ["low"], rolls: [{ set: "low", chance: 0.3 }], bookChance: 0.1 },
     "半兽勇士": { guaranteed: ["low"], rolls: [{ set: "low", chance: 0.35 }] },
-    // 毒蜘蛛王（2026-11-24 接替半兽勇士成为比奇野外 Boss）：与原 Boss 同档掉落（必掉低级、常出低级）
+    // 毒蜘蛛王（2026-11-24 新增，比奇野外 Boss）：沿用比奇野外 Boss 的掉落档，与原 Boss 半兽勇士同口径
     "毒蜘蛛王": { guaranteed: ["low"], rolls: [{ set: "low", chance: 0.35 }] },
     "角蝇王": { guaranteed: ["mid"], rolls: [{ set: "mid", chance: 0.4 }, { set: "woma", chance: 0.08 }], bookChance: 0.15 },
     "毒蛇王": { guaranteed: ["low"], rolls: [{ set: "low", chance: 0.4 }] },
