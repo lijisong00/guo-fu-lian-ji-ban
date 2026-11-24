@@ -31,6 +31,17 @@ const EXPECTED = [
   { slot: 3, name: '慕尼黑火焰', cls: 'tao', level: 9, xp: 1384, gold: 5709 },
 ];
 
+// 快照里除 3 个种子角色外，还可能有用户在线上新建的角色（如 2026-11-24
+// 新建的战士「慕尼黑」Lv7，device 绑定但未走认领码）。种子断言一律按名字
+// 找行，不按下标、不卡总数；多出来的角色只查字段齐全、不丢即可。
+function seedRows(snap) {
+  return EXPECTED.map((exp) => {
+    const row = snap.characters.find((c) => c.name === exp.name);
+    assert.ok(row, `快照里缺种子角色 ${exp.name}`);
+    return { row, exp };
+  });
+}
+
 // 认领码只从本地不进仓库的 seed/claim-code.json 读（测试文件本身进仓库，
 // 所以码绝不能写死在这里）；读不到就只查格式上没有认领码字段。
 let claimCode = null;
@@ -47,13 +58,13 @@ test('快照文件：3 个未认领种子角色，字段齐全，与种子存档
   assertNoClaimCode(text, '快照文件');
   const snap = JSON.parse(text);
   assert.equal(snap.version, 1);
-  assert.equal(snap.characters.length, 3);
+  assert.ok(snap.characters.length >= 3, '快照至少要有 3 个种子角色');
   const seed = JSON.parse(fs.readFileSync(SEED_FILE, 'utf8'));
   const seedSaves = (seed.slots || []).filter((s) => s.save && s.save.name);
   assert.equal(seedSaves.length, 3);
+  const rows = seedRows(snap);
   for (let i = 0; i < 3; i++) {
-    const row = snap.characters[i];
-    const exp = EXPECTED[i];
+    const { row, exp } = rows[i];
     const save = seedSaves[i].save;
     for (const k of ['device_id', 'slot', 'name', 'cls', 'level', 'xp', 'gold', 'data', 'claimed_at', 'created_at', 'updated_at']) {
       assert.ok(k in row, `快照角色缺字段 ${k}`);
@@ -70,6 +81,12 @@ test('快照文件：3 个未认领种子角色，字段齐全，与种子存档
     assert.equal(data.name, save.name);
     assert.deepEqual(data, save, '快照 data 应与种子存档整份一致');
   }
+  // 快照里多出来的非种子角色（如用户新建的）：只要求字段齐全、名字不与种子重名
+  for (const c of snap.characters) {
+    for (const k of ['device_id', 'slot', 'name', 'cls', 'level', 'xp', 'gold', 'data', 'claimed_at', 'created_at', 'updated_at']) {
+      assert.ok(k in c, `快照角色 ${c.name} 缺字段 ${k}`);
+    }
+  }
   assert.deepEqual(snap.listings, []);
   assert.deepEqual(snap.claims, []);
   assert.deepEqual(snap.meta, [], '全未认领快照的 meta 应为空（claimUsed=false）');
@@ -77,11 +94,12 @@ test('快照文件：3 个未认领种子角色，字段齐全，与种子存档
 
 test('已认领快照恢复：保留原 device_id 与 claimed_at，claimUsed 按快照为 true', () => {
   const snap = JSON.parse(fs.readFileSync(SNAPSHOT_FILE, 'utf8'));
-  const claimed = { ...snap.characters[0], device_id: 'snapClaimDev1', claimed_at: 1795400000000 };
+  const seeds = seedRows(snap).map(({ row }) => row);
+  const claimed = { ...seeds[0], device_id: 'snapClaimDev1', claimed_at: 1795400000000 };
   const tmp = path.join(unitDir, 'claimed-snapshot.json');
   fs.writeFileSync(tmp, JSON.stringify({
     ...snap,
-    characters: [claimed, snap.characters[1]],
+    characters: [claimed, seeds[1]],
     meta: [
       { key: 'claim_used', value: '1' },
       { key: 'claim_used_at', value: '1795400000000' },
@@ -110,7 +128,7 @@ let srv;
 
 test.before(async () => {
   dir = makeTmpDir('snapshot');
-  await seedIsolated(dir); // 跑 migrate：快照恢复 3 个 + 种子补种 0 个
+  await seedIsolated(dir); // 跑 migrate：按快照恢复全部角色 + 种子补种 0 个
   srv = await startServer(dir, PORT, CLAIM);
 });
 
@@ -120,17 +138,17 @@ test.after(async () => {
   fs.rmSync(unitDir, { recursive: true, force: true });
 });
 
-test('migrate 快照优先：隔离库里 3 个角色与快照一致，claimUsed=false', async () => {
+test('migrate 快照优先：隔离库里角色与快照一致，claimUsed=false', async () => {
   const h = await api(srv.base, 'GET', '/api/health');
   assert.equal(h.ok, true);
   assert.equal(h.claimUsed, false, '快照全是未认领角色，claimUsed 应为 false');
   const snap = await api(srv.base, 'GET', '/api/snapshot');
   assert.equal(snap.ok, true);
-  assert.equal(snap.counts.characters, 3);
-  assert.equal(snap.characters.length, 3);
-  for (let i = 0; i < 3; i++) {
-    const c = snap.characters[i];
-    const exp = EXPECTED[i];
+  const fileSnap = JSON.parse(fs.readFileSync(SNAPSHOT_FILE, 'utf8'));
+  assert.equal(snap.counts.characters, fileSnap.characters.length);
+  assert.equal(snap.characters.length, fileSnap.characters.length);
+  for (const { row, exp } of seedRows(snap)) {
+    const c = row;
     assert.equal(c.slot, exp.slot);
     assert.equal(c.name, exp.name);
     assert.equal(c.cls, exp.cls);
