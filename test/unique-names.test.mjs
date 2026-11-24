@@ -197,6 +197,32 @@ test('HTTP putSave：改名成别人的名字被拒，改成空闲名字通过�
   console.log('改名判重通过：改别人的名被拒，改空闲名通过、旧名释放');
 });
 
+test('HTTP checkName：空闲名可用、别人占名不可用、本位同名可用、换位同名不可用、空名报错', async () => {
+  // 空闲名字可用
+  const free = await actions(srv.base, DEV_A, 'checkName', { name: '查名甲', slot: 4 });
+  assert.deepEqual(free, { available: true, reason: '' });
+  // A 在 slot 4 建「查名甲」
+  const okA = await putSave(srv.base, DEV_A, 4, saveObj('查名甲', 'mage', 1, 0));
+  assert.equal(okA.ok, true);
+  // B 查同名 → 不可用
+  const taken = await actions(srv.base, DEV_B, 'checkName', { name: '查名甲', slot: 4 });
+  assert.deepEqual(taken, { available: false, reason: '名字已被占用，请换一个' });
+  // A 查自己本位（slot 4）同名 → 可用
+  const own = await actions(srv.base, DEV_A, 'checkName', { name: '查名甲', slot: 4 });
+  assert.deepEqual(own, { available: true, reason: '' });
+  // A 查同名但换位（slot 5）→ 不可用（与 putSave 同 device 两 slot 判重一致）
+  const otherSlot = await actions(srv.base, DEV_A, 'checkName', { name: '查名甲', slot: 5 });
+  assert.deepEqual(otherSlot, { available: false, reason: '名字已被占用，请换一个' });
+  // B 不带 slot 查同名 → 不可用（slot 省略时不跳过任何行）
+  const noSlot = await actions(srv.base, DEV_B, 'checkName', { name: '查名甲' });
+  assert.deepEqual(noSlot, { available: false, reason: '名字已被占用，请换一个' });
+  // 空名报错
+  const errEmpty = await actionsErr(srv.base, DEV_A, 'checkName', { name: '   ', slot: 4 });
+  assert.ok(errEmpty, '空名应报错');
+  assert.match(errEmpty, /名字不能为空/);
+  console.log('checkName 通过：空闲可用、别人占名不可用、本位同名可用、换位/省略 slot 不可用、空名报错');
+});
+
 test('HTTP REST /api/character：同名建角 409，不同名通过', async () => {
   // 先用 REST 建一个「接口甲」
   const c1 = await api(srv.base, 'POST', '/api/character', {

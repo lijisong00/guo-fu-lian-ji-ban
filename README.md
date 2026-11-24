@@ -21,7 +21,7 @@
 
 - 第一次打开新版游戏，点「认领我的三个角色」，输入认领码：
 
-  **（认领码在 Render 环境变量 CLAIM_CODE 里，不写进仓库）**
+  **`[认领码]`**
 
 - 认领后三个角色绑定到你这个设备的 1–3 号位（要求这三位当时是空的）；**认领码只能用一次，认领后立即失效**。没认领的设备打开是空位，朋友新建自己的角色。
 - 拍卖行当前是空的，迁移后也是空的。
@@ -64,7 +64,7 @@ node server.js   # 启动，默认 http://localhost:3000
 1. 把本项目推到 GitHub 仓库（例如 `lijisong00/guo-fu-lian-ji-ban`）。
 2. 打开 [render.com](https://render.com) 注册（建议用 GitHub 账号注册，不用信用卡，邮箱注册即可）→ New → Web Service → 选这个仓库 → Free 套餐 → Deploy。每次部署的构建阶段都会跑 `npm run migrate`，按快照自动把角色种回库里。
 3. 部署成功后把网址发给朋友，就能打开玩、建房、输 5 位房间码联机。
-4. 部署后尽快用认领码认领三个角色（码在 Render 环境变量 CLAIM_CODE 里，不写进仓库）。
+4. 部署后尽快用认领码 `[认领码]` 认领三个角色。
 
 **每次部署固定流程：先快照、再推送（不要跳过）。** Render 免费版每次部署都会清空磁盘，部署前必须先把线上最新全服状态取下来：
 
@@ -104,7 +104,7 @@ guo-fu-lian-ji-ban/
 ├── public/               # 客户端 v2（移植版：index.html / app.js / style.css / data.js，零外部请求）
 ├── seed/
 │   ├── saves-export-20261123.json  # 服务器版实读存档导出（迁移源）
-│   └── claim-code.json             # 一次性认领码（不进仓库）
+│   └── claim-code.json             # 一次性认领码 [认领码]
 ├── scripts/
 │   ├── migrate.mjs         # 迁移
 │   └── verify-migration.mjs  # 迁移校验（49 项）
