@@ -1,33 +1,50 @@
 'use strict';
-// 冒烟测试：启动 / 角色 / 认领 / 房间（全程隔离库 + 测试认领码 TEST123）。
-// 口径依据 docs/protocol.md：
+// 冒烟测试：启动 / 角色 / 认领 / 世界（全程隔离库 + 测试认领码 TEST123）。
+// 世界制后 WS 与房间已删除（Phase 6），进图即进世界，走 HTTP /actions。
+// 口径依据 docs/protocol.md 与 docs/WORLD-DESIGN.md：
 //   - 每设备 5 位，第 6 个拒绝 '存档位已满，最多 5 个'
 //   - 新角色金币 200、中瓶血/蓝各 100、1 级、开局本职业 1 级技能
 //   - 认领码错码拒、二次认领拒 '认领码已失效'、认领要求 1-3 号位为空
-//   - 房间码 5 位大写字母+数字，每房最多 4 人，房主离开房间解散
-//   - 快照每 100ms 广播
+//   - 世界：同图同层进同一世界（进图即进，不用建房）；世界无人数上限
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import {
-  ROOT, sleep, waitFor, makeTmpDir, seedIsolated, startServer, stopServer,
-  api, getText, createChar, listChars, WsClient,
+  sleep, makeTmpDir, seedIsolated, startServer, stopServer,
+  api, getText, createChar, listChars,
 } from './support/helpers.mjs';
+
+const require = createRequire(import.meta.url);
+const character = require('../lib/character.js');
 
 const PORT = 18731;
 const CLAIM = 'TEST123';
 const DEV_FULL = 'smokeFullDev01';   // 5 位占满测试
 const DEV_CLAIM = 'smokeClaimDev1';  // 认领设备
 const DEV_PRE = 'smokePreDev001';    // 认领前无角色设备
-const DEV_B = 'smokeRoomDevB1';
-const DEV_C = 'smokeRoomDevC1';
-const DEV_D = 'smokeRoomDevD1';
-const DEV_E = 'smokeRoomDevE1';
+const DEV_B = 'smokeWorldDevB1';
+const DEV_C = 'smokeWorldDevC1';
+const DEV_D = 'smokeWorldDevD1';
+const DEV_E = 'smokeWorldDevE1';
 
 let dir;
 let srv;
-const clients = [];
-function track(c) { clients.push(c); return c; }
+
+async function actions(base, pid, action, args = {}) {
+  const r = await fetch(base + '/actions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(pid ? { Cookie: `lg_device_id=${pid}` } : {}),
+    },
+    body: JSON.stringify({ action, args, actionCallId: `smoke-${Math.random()}` }),
+  });
+  assert.equal(r.status, 200, `POST /actions ${action} 应返回 200`);
+  const j = await r.json();
+  if (j.error) throw new Error(`动作 ${action} 报错：${j.error}`);
+  return j.data;
+}
 
 test.before(async () => {
   dir = makeTmpDir('smoke');
@@ -36,7 +53,6 @@ test.before(async () => {
 });
 
 test.after(async () => {
-  for (const c of clients) c.close();
   await stopServer(srv);
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -46,7 +62,8 @@ test('服务器启动：health / 首页 / stages', async () => {
   assert.equal(h.ok, true);
   assert.equal(h.service, 'guo-fu-lian-ji-ban');
   assert.equal(h.claimUsed, false);
-  assert.equal(h.rooms, 0);
+  assert.equal(h.worlds, 0, '无人时世界数为 0');
+  assert.equal(h.playersOnline, 0, '无人时在线人数为 0');
 
   const home = await getText(srv.base, '/');
   assert.equal(home.status, 200);
@@ -78,15 +95,13 @@ test('角色：新设备 5 个空位；建战士；第 6 个位拒绝；删角�
   assert.equal(ch.level, 1);
   assert.equal(ch.cls, 'war');
 
-  // WS 上看开局药水与技能（protocol：中瓶血/蓝各 100）
-  const ws = track(new WsClient(srv.base, DEV_FULL));
-  await ws.connect(1);
-  const me = await ws.waitMe((m) => m.hpPots !== undefined, 5000, '收到 me');
-  assert.deepEqual(me.hpPots, [0, 100, 0], '开局中瓶血瓶×100');
-  assert.deepEqual(me.mpPots, [0, 100, 0], '开局中瓶魔法瓶×100');
-  assert.ok(me.learned.war_basic, '战士开局学会基本剑术');
-  assert.equal(me.learned.war_basic.lv, 1);
-  ws.close();
+  // 开局药水与技能（protocol：中瓶血/蓝各 100，战士开局学会基本剑术）：
+  // 世界制后服务端不再走 WS 发 me，改为直接断言建号存档模板
+  const save = character.newCharacterSave('SmokeWar01', 'war');
+  assert.deepEqual(save.hpPots, [0, 100, 0], '开局中瓶血瓶×100');
+  assert.deepEqual(save.mpPots, [0, 100, 0], '开局中瓶魔法瓶×100');
+  assert.ok(save.learned.war_basic, '战士开局学会基本剑术');
+  assert.equal(save.learned.war_basic.lv, 1);
 
   await createChar(srv.base, DEV_FULL, 2, 'SmokeMag01', 'mage');
   await createChar(srv.base, DEV_FULL, 3, 'SmokeTao01', 'tao');
@@ -109,11 +124,9 @@ test('角色：新设备 5 个空位；建战士；第 6 个位拒绝；删角�
 });
 
 test('认领：错码拒绝；测试码认领成功三角色与 seed 一致；二次认领拒绝', async () => {
-  // 认领前：无角色设备 WS 选 1 号位应被拒绝（预置角色未认领不许选）
-  const pre = track(new WsClient(srv.base, DEV_PRE));
-  const err = await pre.connect(1, true);
-  assert.match(err.msg, /没有属于这个设备/);
-  pre.close();
+  // 认领前：无角色设备 5 位全空
+  const pre = await listChars(srv.base, DEV_PRE);
+  assert.equal(pre.filter(Boolean).length, 0, '认领前设备应无角色');
 
   const wrong = await api(srv.base, 'POST', '/api/claim', { code: 'WRONG00', deviceId: DEV_CLAIM });
   assert.equal(wrong.ok, false);
@@ -147,91 +160,52 @@ test('认领：错码拒绝；测试码认领成功三角色与 seed 一致；�
   const h = await api(srv.base, 'GET', '/api/health');
   assert.equal(h.claimUsed, true);
 
-  // 认领后：同一设备 WS 可选 1 号位预置角色
-  const post = track(new WsClient(srv.base, DEV_CLAIM));
-  const authed = await post.connect(1);
-  assert.equal(authed.character.name, '慕尼黑好炸药');
-  assert.equal(authed.character.level, 11);
-  post.close();
+  // 认领后：同一设备角色列表里就是预置三角色
+  const post = await listChars(srv.base, DEV_CLAIM);
+  assert.equal(post[0].name, '慕尼黑好炸药');
+  assert.equal(post[0].level, 11);
   console.log('认领成功：法师慕尼黑好炸药 Lv11、战士无名侠客 Lv2、道士慕尼黑火焰 Lv9');
 });
 
-test('房间：建房得 5 位码；第二人加入；快照 100ms 级；房主离开房间解散', async () => {
-  const owner = track(new WsClient(srv.base, DEV_CLAIM));
-  await owner.connect(1);
-  owner.send({ t: 'create_room' });
-  const joined = await owner.waitEvent((e) => e.t === 'room_joined', 5000, '房主 room_joined');
-  assert.match(joined.code, /^[A-Z0-9]{5}$/, '房间码为 5 位大写字母+数字：' + joined.code);
-  console.log('房间码样例：' + joined.code);
+test('世界：进图即进世界；同图同层两人同世界、看到同一批怪；离图后在线人数归零；世界无 4 人上限', async () => {
+  const meA = { playerId: DEV_CLAIM, name: '慕尼黑好炸药', classId: 'mage', level: 11, maxHp: 300 };
+  const meB = { playerId: DEV_FULL, name: 'SmokeWar01', classId: 'warrior', level: 1, maxHp: 100 };
+  const jA = await actions(srv.base, DEV_CLAIM, 'joinWorld', { ...meA, worldKey: '19:0', x: 0, y: 0 });
+  assert.equal(jA.ok, true);
+  assert.equal(jA.worldKey, '19:0');
+  assert.ok(jA.monsters.length > 0, '进世界应看到怪');
+  assert.equal(jA.memberCount, 1);
 
-  const joiner = track(new WsClient(srv.base, DEV_FULL));
-  await joiner.connect(1);
-  joiner.send({ t: 'join_room', code: joined.code });
-  const joined2 = await joiner.waitEvent((e) => e.t === 'room_joined', 5000, '加入者 room_joined');
-  assert.equal(joined2.code, joined.code);
-  assert.equal(joined2.players.length, 2);
+  const jB = await actions(srv.base, DEV_FULL, 'joinWorld', { ...meB, worldKey: '19:0', x: 0, y: 0 });
+  assert.equal(jB.ok, true);
+  assert.equal(jB.memberCount, 2);
+  const idsA = new Set(jA.monsters.map((m) => m.id));
+  const shared = jB.monsters.filter((m) => idsA.has(m.id));
+  assert.ok(shared.length > 0, '同世界两人应看到同一批怪');
+  assert.equal(jB.monsters.find((m) => m.id === shared[0].id).hp, shared[0].hp, '同一只怪血量应一致');
 
-  // 快照 100ms 级到达：连续 3 个 tick，间隔应在 50~300ms 内
-  const ticks = [];
-  await waitFor(() => {
-    const s = joiner.lastSnapshot;
-    if (s && (ticks.length === 0 || s.tick !== ticks[ticks.length - 1].tick)) {
-      ticks.push({ tick: s.tick, at: s.at });
-    }
-    return ticks.length >= 3;
-  }, { timeout: 5000, label: '收到 3 个快照 tick' });
-  const gaps = [ticks[1].at - ticks[0].at, ticks[2].at - ticks[1].at];
-  for (const g of gaps) assert.ok(g >= 50 && g <= 300, '快照间隔应在 50~300ms，实际 ' + g + 'ms');
-  assert.equal(joiner.lastSnapshot.players.length, 2, '快照里应有 2 名玩家');
-  assert.equal(joiner.lastSnapshot.stage, 'city');
-  console.log('快照间隔：' + gaps.join('ms / ') + 'ms');
+  let h = await api(srv.base, 'GET', '/api/health');
+  assert.equal(h.worlds, 1, '同图同层只建 1 个世界');
+  assert.equal(h.playersOnline, 2);
 
-  // 房主离开 → 房间解散
-  owner.send({ t: 'leave_room' });
-  await owner.waitEvent((e) => e.t === 'room_left', 5000, '房主 room_left');
-  await waitFor(async () => (await api(srv.base, 'GET', '/api/health')).rooms === 0, {
-    timeout: 5000, label: 'health rooms 回 0',
-  });
-  owner.close();
-  joiner.close();
-});
-
-test('房间：满 4 人后第 5 人进房拒绝', async () => {
-  await createChar(srv.base, DEV_B, 1, 'SmokeRoomB', 'war');
-  await createChar(srv.base, DEV_C, 1, 'SmokeRoomC', 'mage');
-  await createChar(srv.base, DEV_D, 1, 'SmokeRoomD', 'tao');
-  await createChar(srv.base, DEV_E, 1, 'SmokeRoomE', 'war');
-
-  const owner = track(new WsClient(srv.base, DEV_CLAIM));
-  await owner.connect(1);
-  owner.send({ t: 'create_room' });
-  const joined = await owner.waitEvent((e) => e.t === 'room_joined', 5000, '房主建房');
-  const code = joined.code;
-
-  const members = [];
+  // 世界无 4 人上限：第 3、4、5 人也能进同一世界
   for (const dev of [DEV_B, DEV_C, DEV_D]) {
-    const c = track(new WsClient(srv.base, dev));
-    await c.connect(1);
-    c.send({ t: 'join_room', code });
-    await c.waitEvent((e) => e.t === 'room_joined', 5000, dev + ' 加入');
-    members.push(c);
+    const j = await actions(srv.base, dev, 'joinWorld', {
+      playerId: dev, name: '路人' + dev.slice(-1), classId: 'mage', level: 1, maxHp: 100,
+      worldKey: '19:0', x: 0, y: 0,
+    });
+    assert.equal(j.ok, true, dev + ' 应能进世界（无 4 人上限）');
   }
-  await waitFor(() => owner.lastSnapshot && owner.lastSnapshot.players.length === 4, {
-    timeout: 5000, label: '快照里 4 名玩家',
-  });
+  h = await api(srv.base, 'GET', '/api/health');
+  assert.equal(h.playersOnline, 5);
+  assert.equal(h.worlds, 1);
 
-  const fifth = track(new WsClient(srv.base, DEV_E));
-  await fifth.connect(1);
-  const since = Date.now();
-  fifth.send({ t: 'join_room', code });
-  const err = await waitFor(() => fifth.errors.find((e) => e.at >= since), {
-    timeout: 5000, label: '第 5 人收到 error',
-  });
-  assert.match(err.msg, /满/);
-  console.log('满员拒绝：' + err.msg);
-
-  for (const c of [owner, ...members, fifth]) c.close();
+  // 全部离图 → 在线人数归零；空世界 5 分钟后才卸载（STALE_MS），不是立即删
+  for (const dev of [DEV_CLAIM, DEV_FULL, DEV_B, DEV_C, DEV_D]) {
+    await actions(srv.base, dev, 'leaveWorld', { playerId: dev, worldKey: '19:0' });
+  }
   await sleep(300);
-  const h = await api(srv.base, 'GET', '/api/health');
-  assert.equal(h.rooms, 0, '全部断开后房间应解散，实际 rooms=' + h.rooms);
+  h = await api(srv.base, 'GET', '/api/health');
+  assert.equal(h.playersOnline, 0, '全员离图后在线人数应为 0');
+  console.log('世界冒烟通过：同世界两人共怪、5 人同世界无上限、全员离图后在线人数归零');
 });

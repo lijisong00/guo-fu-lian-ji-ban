@@ -1,5 +1,6 @@
 'use strict';
-// 测试共用 helper：只做隔离环境的搭建与 WS/HTTP 封装，不含任何断言。
+// 测试共用 helper：只做隔离环境的搭建与 HTTP 封装，不含任何断言。
+// 世界制后 WS 与旧房间引擎已删除（Phase 6），测试只走 HTTP（/api/* 与 /actions）。
 // 隔离铁律：所有服务器一律用 mkdtemp 的 DATA_DIR + 测试认领码启动，
 // 绝不碰 ~/workspace/guo-fu-lian-ji-ban/data/ 与真实认领码。
 import { spawn, execFile } from 'node:child_process';
@@ -8,9 +9,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
-const WebSocket = require('ws');
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -98,88 +96,4 @@ export async function listChars(base, deviceId) {
   const r = await api(base, 'GET', `/api/characters?deviceId=${deviceId}`);
   if (!r.ok) throw new Error('取角色列表失败：' + JSON.stringify(r));
   return r.characters;
-}
-
-// 轻量 WS 客户端：按 public/app.js 的协议发 auth / 动作，收 snapshot / me / toast / 事件。
-export class WsClient {
-  constructor(base, deviceId) {
-    this.base = base;
-    this.deviceId = deviceId;
-    this.lastSnapshot = null;
-    this.lastMe = null;
-    this.toasts = [];
-    this.events = [];
-    this.errors = [];
-    this.roomCode = null;
-    this.authed = null;
-    this.msgCount = 0;
-    this.closed = false;
-  }
-
-  async connect(slot, expectError = false) {
-    const url = this.base.replace(/^http/, 'ws') + '/ws';
-    this.ws = new WebSocket(url);
-    await new Promise((resolve, reject) => {
-      const to = setTimeout(() => reject(new Error('WS 连接超时')), 10000);
-      this.ws.once('open', () => { clearTimeout(to); resolve(); });
-      this.ws.once('error', (e) => { clearTimeout(to); reject(e); });
-    });
-    this.ws.on('message', (raw) => {
-      let m;
-      try { m = JSON.parse(raw.toString()); } catch { return; }
-      this.msgCount++;
-      const at = Date.now();
-      if (m.t === 'snapshot') this.lastSnapshot = { ...m, at };
-      else if (m.t === 'me') this.lastMe = { ...m, at };
-      else if (m.t === 'toast') this.toasts.push({ msg: m.msg, at });
-      else if (m.t === 'error') this.errors.push({ msg: m.msg, at });
-      else this.events.push({ ...m, at });
-      if (m.t === 'room_joined') this.roomCode = m.code;
-      if (m.t === 'authed') this.authed = m;
-    });
-    this.ws.on('close', () => { this.closed = true; });
-    this.send({ t: 'auth', deviceId: this.deviceId, slot });
-    if (expectError) {
-      const e = await waitFor(() => this.errors[0] || (this.closed && { msg: '(连接已断开，无 error 文本)' }), {
-        timeout: 10000, label: 'WS 鉴权应拒绝',
-      });
-      return e;
-    }
-    await waitFor(() => this.authed || this.errors[0], { timeout: 10000, label: 'WS 鉴权' });
-    if (!this.authed) throw new Error('WS 鉴权失败：' + (this.errors[0] && this.errors[0].msg));
-    return this.authed;
-  }
-
-  send(obj) { this.ws.send(JSON.stringify(obj)); }
-
-  async waitEvent(pred, timeout = 10000, label = 'event') {
-    return waitFor(() => this.events.find(pred), { timeout, label });
-  }
-
-  async waitToast(substr, since, timeout = 5000) {
-    return waitFor(
-      () => this.toasts.find((t) => t.at >= since && t.msg.includes(substr)),
-      { timeout, label: `toast 含「${substr}」` },
-    );
-  }
-
-  noToastSince(substr, since) {
-    return !this.toasts.some((t) => t.at >= since && t.msg.includes(substr));
-  }
-
-  async waitSnapshot(pred, timeout = 10000, label = 'snapshot 条件') {
-    return waitFor(() => {
-      const s = this.lastSnapshot;
-      return s && pred(s) ? s : null;
-    }, { timeout, label });
-  }
-
-  async waitMe(pred, timeout = 10000, label = 'me 条件') {
-    return waitFor(() => {
-      const m = this.lastMe;
-      return m && pred(m) ? m : null;
-    }, { timeout, label });
-  }
-
-  close() { try { this.ws.close(); } catch {} }
 }

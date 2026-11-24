@@ -16,11 +16,11 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const { WebSocketServer } = require('ws');
 
 const store = require('./lib/db.js');
 const backup = require('./lib/backup.js');
-const game = require('./lib/game.js');
+const Data = require('./shared/data.js');
+const character = require('./lib/character.js');
 const { createActionsShim, deviceIdFromCookie } = require('./lib/actions-shim.js');
 // 服务器版客户端的 POST /actions 兼容层（见 docs/PORTING-V89.md）。
 const actionsShim = createActionsShim(store);
@@ -133,10 +133,6 @@ function serveStatic(req, res) {
 // 落后 30 秒自动存盘，拍卖三处原本只读 DB——在线玩家刚买/刚打到的东西
 // 上架会报“背包里没有”，买东西扣的金币、领取的金币/物品还会在下次
 // 自动存盘时被内存里的旧存档覆盖丢掉。离线玩家（无内存对象）仍走 DB。
-function livePlayerFor(deviceId, slot) {
-  const p = game.playersByDevice.get(deviceId);
-  return p && p.slot === slot ? p : null;
-}
 function auctionPublic(l) {
   return {
     id: l.id, sellerName: l.sellerName, kind: l.kind, item: l.item,
@@ -147,8 +143,7 @@ function createAuctionListing(deviceId, slot, uid, bookId, price) {
   if (!Number.isInteger(price) || price <= 0 || price > 999999999) {
     return { ok: false, error: '价格不对（需为正整数金币）' };
   }
-  const live = livePlayerFor(deviceId, slot);
-  const ch = live ? { data: live.save } : store.getCharacter(deviceId, slot);
+  const ch = store.getCharacter(deviceId, slot);
   if (!ch || !ch.data) return { ok: false, error: '角色不存在' };
   const save = ch.data;
   if (uid !== undefined && uid !== null) {
@@ -156,19 +151,17 @@ function createAuctionListing(deviceId, slot, uid, bookId, price) {
     if (idx < 0) return { ok: false, error: '背包里没有这件装备（只能上架背包装备）' };
     const item = save.bag.splice(idx, 1)[0];
     store.saveCharacter(deviceId, slot, save);
-    if (live) live.meDirty = true;
     const listing = store.createListing(deviceId, save.name, slot, 'equip', item, price);
     backup.writeBackup(store, { force: true });
     return { ok: true, listing: auctionPublic(listing) };
   }
   if (bookId) {
-    const nid = game.normSkillId(bookId);
+    const nid = character.normSkillId(bookId);
     const idx = (save.books || []).indexOf(nid);
     if (idx < 0) return { ok: false, error: '背包里没有这本技能书' };
     save.books.splice(idx, 1);
     store.saveCharacter(deviceId, slot, save);
-    if (live) live.meDirty = true;
-    const sk = game.Data.SKILLS[nid];
+    const sk = Data.SKILLS[nid];
     const item = { bookId: nid, name: sk.name, cls: sk.cls, req: sk.req };
     const listing = store.createListing(deviceId, save.name, slot, 'skillbook', item, price);
     backup.writeBackup(store, { force: true });
@@ -181,19 +174,16 @@ function buyAuctionListing(deviceId, slot, listingId) {
   if (!listing || listing.status !== 'active') return { ok: false, error: '物品已不在售' };
   if (listing.expiresAt <= Date.now()) return { ok: false, error: '物品已过期' };
   if (listing.sellerDeviceId === deviceId) return { ok: false, error: '不能买自己的物品' };
-  const live = livePlayerFor(deviceId, slot);
-  const ch = live ? { data: live.save } : store.getCharacter(deviceId, slot);
+  const ch = store.getCharacter(deviceId, slot);
   if (!ch || !ch.data) return { ok: false, error: '角色不存在' };
   if ((ch.data.gold || 0) < listing.price) return { ok: false, error: '金币不够' };
   ch.data.gold -= listing.price;
   store.saveCharacter(deviceId, slot, ch.data);
-  if (live) live.meDirty = true;
   const r = store.buyListingTx(listingId, deviceId, slot);
   if (!r.ok) {
     // 并发下被人先买走：退钱
     ch.data.gold += listing.price;
     store.saveCharacter(deviceId, slot, ch.data);
-    if (live) live.meDirty = true;
     return r;
   }
   backup.writeBackup(store, { force: true });
@@ -203,8 +193,7 @@ function claimAuctionClaim(deviceId, slot, claimId) {
   const claim = store.getClaim(claimId);
   if (!claim || claim.userDeviceId !== deviceId) return { ok: false, error: '待领取不存在' };
   if (claim.claimedAt) return { ok: false, error: '已经领取过了' };
-  const live = livePlayerFor(deviceId, slot);
-  const ch = live ? { data: live.save } : store.getCharacter(deviceId, slot);
+  const ch = store.getCharacter(deviceId, slot);
   if (!ch || !ch.data) return { ok: false, error: '角色不存在' };
   const save = ch.data;
   if (claim.kind === 'gold') {
@@ -212,17 +201,16 @@ function claimAuctionClaim(deviceId, slot, claimId) {
   } else {
     const item = claim.payload;
     if (item && item.bookId) {
-      const nid = game.normSkillId(item.bookId);
+      const nid = character.normSkillId(item.bookId);
       if (!save.books.includes(nid)) save.books.push(nid);
     } else if (item && item.uid) {
-      if (save.bag.length >= game.Data.BAG_CAP) return { ok: false, error: '背包满了，先腾出位置' };
+      if (save.bag.length >= Data.BAG_CAP) return { ok: false, error: '背包满了，先腾出位置' };
       save.bag.push(item);
     } else {
       return { ok: false, error: '待领取物品格式不对' };
     }
   }
   store.saveCharacter(deviceId, slot, save);
-  if (live) live.meDirty = true;
   if (!store.markClaimClaimed(claimId)) return { ok: false, error: '领取失败（已被领走）' };
   backup.writeBackup(store, { force: true });
   return { ok: true };
@@ -234,11 +222,12 @@ async function handleApi(req, res) {
   const query = new URL(req.url, 'http://x').searchParams;
   try {
     if (req.method === 'GET' && url === '/api/health') {
+      const ws = actionsShim.worldStats ? actionsShim.worldStats() : { worlds: 0, playersOnline: 0 };
       return sendJson(res, 200, {
         ok: true, service: 'guo-fu-lian-ji-ban', version: '1.0.0',
         time: new Date().toISOString(),
-        rooms: game.rooms.size,
-        playersOnline: game.playersByDevice.size,
+        worlds: ws.worlds,
+        playersOnline: ws.playersOnline,
         claimUsed: store.isClaimUsed(),
       });
     }
@@ -263,7 +252,7 @@ async function handleApi(req, res) {
       if (!cls) return sendJson(res, 400, { ok: false, error: '职业不对' });
       if (store.getCharacter(deviceId, slot)) return sendJson(res, 409, { ok: false, error: '该存档位已有角色' });
       if (store.nameTaken(deviceId, body.name.trim())) return sendJson(res, 409, { ok: false, error: '角色名已被占用' });
-      const save = game.newCharacterSave(body.name.trim(), cls);
+      const save = character.newCharacterSave(body.name.trim(), cls);
       const ch = store.createCharacter(deviceId, slot, save.name, cls, save);
       if (!ch) return sendJson(res, 409, { ok: false, error: '建角色失败（位被占或名字重复）' });
       backup.writeBackup(store, { force: true });
@@ -300,7 +289,7 @@ async function handleApi(req, res) {
       return sendJson(res, 200, { ok: true, characters: r.characters });
     }
     if (req.method === 'GET' && url === '/api/stages') {
-      return sendJson(res, 200, { ok: true, stages: game.listStages() });
+      return sendJson(res, 200, { ok: true, stages: character.listStages() });
     }
     if (req.method === 'GET' && url === '/api/auction') {
       store.expireDueListings();
@@ -362,15 +351,6 @@ async function handleApi(req, res) {
       if (!r.ok) return sendJson(res, 400, { ok: false, error: r.error });
       return sendJson(res, 200, { ok: true });
     }
-    if (req.method === 'GET' && url === '/api/debug/stats' && process.env.DEBUG === '1') {
-      return sendJson(res, 200, {
-        ok: true,
-        rooms: [...game.rooms.values()].map((r) => ({
-          code: r.code, stage: r.stageId, floor: r.floor,
-          players: r.players.size, monsters: r.monsters.length, drops: r.drops.length,
-        })),
-      });
-    }
     return sendJson(res, 404, { ok: false, error: 'unknown api' });
   } catch (e) {
     console.error('[api]', url, e.message);
@@ -404,245 +384,6 @@ const server = http.createServer((req, res) => {
   }
   return serveStatic(req, res);
 });
-
-// ---------------------------------------------------------------- WebSocket
-const wss = new WebSocketServer({ server, path: '/ws' });
-
-function wsSend(ws, obj) {
-  if (ws.readyState === 1) {
-    try { ws.send(JSON.stringify(obj)); } catch (_) { /* ignore */ }
-  }
-}
-function flushPlayer(ws, player) {
-  const { toasts, events } = game.flushPlayerMessages(player);
-  for (const msg of toasts) wsSend(ws, { t: 'toast', msg });
-  for (const ev of events) wsSend(ws, ev);
-  const now = Date.now();
-  if (player.meDirty || now - (player.lastMeAt || 0) > 1000) {
-    wsSend(ws, game.meFor(player, game.roomOf(player)));
-    player.lastMeAt = now;
-    player.meDirty = false;
-  }
-}
-function roomPlayers(room) {
-  return [...room.players.values()].map((p) => p.save.name);
-}
-function broadcastRoom(room, obj, exceptDeviceId) {
-  for (const p of room.players.values()) {
-    if (exceptDeviceId && p.deviceId === exceptDeviceId) continue;
-    if (p.ws) wsSend(p.ws, obj);
-  }
-}
-
-wss.on('connection', (ws) => {
-  let player = null;
-  let authed = false;
-  const authTimer = setTimeout(() => {
-    if (!authed) { wsSend(ws, { t: 'error', msg: '请先鉴权' }); ws.close(); }
-  }, 10000);
-
-  ws.on('message', (raw) => {
-    let msg;
-    try { msg = JSON.parse(raw.toString()); } catch (_) {
-      wsSend(ws, { t: 'error', msg: '消息格式不对' });
-      return;
-    }
-    if (!authed) {
-      if (msg.t !== 'auth') {
-        wsSend(ws, { t: 'error', msg: '连上后第一条必须是鉴权消息' });
-        ws.close();
-        return;
-      }
-      const deviceId = msg.deviceId;
-      let slot = Number(msg.slot);
-      if (!validDeviceId(deviceId)) {
-        wsSend(ws, { t: 'error', msg: 'deviceId 不对' });
-        ws.close();
-        return;
-      }
-      if (!Number.isInteger(slot) || slot < 1 || slot > 5) {
-        slot = store.getLastSlot(deviceId) || 1;
-      }
-      const ch = store.getCharacter(deviceId, slot);
-      if (!ch || !ch.data) {
-        wsSend(ws, { t: 'error', msg: '该存档位没有属于这个设备的角色' });
-        ws.close();
-        return;
-      }
-      // 同一设备在别处已在线：顶掉旧连接
-      const old = game.playersByDevice.get(deviceId);
-      if (old && old.ws && old.ws !== ws) {
-        try { wsSend(old.ws, { t: 'error', msg: '已在其他地方登录' }); old.ws.close(); } catch (_) { /* ignore */ }
-      }
-      player = game.newPlayer(deviceId, slot, ch);
-      player.ws = ws;
-      game.playersByDevice.set(deviceId, player);
-      store.setLastSlot(deviceId, slot);
-      authed = true;
-      clearTimeout(authTimer);
-      wsSend(ws, {
-        t: 'authed',
-        slot,
-        character: { slot: ch.slot, name: ch.name, cls: ch.cls, level: ch.level, xp: ch.xp, gold: ch.gold },
-      });
-      flushPlayer(ws, player);
-      return;
-    }
-
-    try {
-      switch (msg.t) {
-        case 'select_character': {
-          const slot = Number(msg.slot);
-          if (!Number.isInteger(slot) || slot < 1 || slot > 5) {
-            wsSend(ws, { t: 'error', msg: '存档位只能是 1 到 5' });
-            break;
-          }
-          const ch = store.getCharacter(player.deviceId, slot);
-          if (!ch || !ch.data) {
-            wsSend(ws, { t: 'error', msg: '该存档位没有属于这个设备的角色' });
-            break;
-          }
-          if (player.roomCode) game.leaveRoom(player);
-          game.playersByDevice.delete(player.deviceId);
-          player = game.newPlayer(player.deviceId, slot, ch);
-          player.ws = ws;
-          game.playersByDevice.set(player.deviceId, player);
-          store.setLastSlot(player.deviceId, slot);
-          wsSend(ws, {
-            t: 'authed', slot,
-            character: { slot: ch.slot, name: ch.name, cls: ch.cls, level: ch.level, xp: ch.xp, gold: ch.gold },
-          });
-          flushPlayer(ws, player);
-          break;
-        }
-        case 'create_room': {
-          const room = game.createRoom(player);
-          wsSend(ws, { t: 'room_joined', code: room.code, players: roomPlayers(room) });
-          flushPlayer(ws, player);
-          break;
-        }
-        case 'join_room': {
-          const code = String(msg.code || '').toUpperCase();
-          const room = game.rooms.get(code);
-          if (!room) { wsSend(ws, { t: 'error', msg: '房间码不对' }); break; }
-          const r = game.joinRoom(room, player);
-          if (!r.ok) { wsSend(ws, { t: 'error', msg: r.error }); break; }
-          // 进房后落到房主所在的图/层：新进玩家与房内同步
-          const cur = game.roomOf(player);
-          if (cur) {
-            player.x = 0; player.y = 0;
-          }
-          wsSend(ws, { t: 'room_joined', code: room.code, players: roomPlayers(room) });
-          broadcastRoom(room, { t: 'room_update', players: roomPlayers(room) });
-          flushPlayer(ws, player);
-          break;
-        }
-        case 'leave_room': {
-          const room = game.roomOf(player);
-          game.leaveRoom(player);
-          if (room) broadcastRoom(room, { t: 'room_update', players: roomPlayers(room) });
-          wsSend(ws, { t: 'room_left' });
-          flushPlayer(ws, player);
-          break;
-        }
-        case 'auction_list': {
-          store.expireDueListings();
-          wsSend(ws, {
-            t: 'auction_list',
-            listings: store.listActiveListings(200).map(auctionPublic),
-          });
-          break;
-        }
-        case 'auction_create': {
-          const slot = Number(msg.slot) || player.slot;
-          const r = createAuctionListing(player.deviceId, slot, msg.uid, msg.bookId, Number(msg.price));
-          if (!r.ok) wsSend(ws, { t: 'error', msg: r.error });
-          else wsSend(ws, { t: 'auction_created', listing: r.listing });
-          flushPlayer(ws, player);
-          break;
-        }
-        case 'auction_buy': {
-          const slot = Number(msg.slot) || player.slot;
-          const r = buyAuctionListing(player.deviceId, slot, Number(msg.id));
-          if (!r.ok) wsSend(ws, { t: 'error', msg: r.error });
-          else wsSend(ws, { t: 'auction_bought', listing: r.listing });
-          flushPlayer(ws, player);
-          break;
-        }
-        case 'auction_delist': {
-          const r = store.delistListingTx(Number(msg.id), player.deviceId);
-          if (!r.ok) wsSend(ws, { t: 'error', msg: r.error });
-          else {
-            backup.writeBackup(store, { force: true });
-            wsSend(ws, { t: 'auction_delisted', id: Number(msg.id) });
-          }
-          flushPlayer(ws, player);
-          break;
-        }
-        case 'auction_claim': {
-          const slot = Number(msg.slot) || player.slot;
-          const r = claimAuctionClaim(player.deviceId, slot, Number(msg.claimId));
-          if (!r.ok) wsSend(ws, { t: 'error', msg: r.error });
-          else wsSend(ws, { t: 'auction_claimed', id: Number(msg.claimId) });
-          flushPlayer(ws, player);
-          break;
-        }
-        case 'auction_claims': {
-          wsSend(ws, { t: 'auction_claims', claims: store.listPendingClaims(player.deviceId) });
-          break;
-        }
-        default: {
-          const room = game.roomOf(player);
-          if (!room) {
-            if (msg.t === 'ping') wsSend(ws, { t: 'pong' });
-            else wsSend(ws, { t: 'error', msg: '请先创建或加入房间' });
-            break;
-          }
-          const reply = game.handleAction(room, player, msg);
-          if (reply) wsSend(ws, reply);
-          flushPlayer(ws, player);
-          break;
-        }
-      }
-    } catch (e) {
-      console.error('[ws]', msg && msg.t, e.message);
-      wsSend(ws, { t: 'error', msg: e.message || '操作失败' });
-    }
-  });
-
-  ws.on('close', () => {
-    clearTimeout(authTimer);
-    if (player) {
-      const room = game.roomOf(player);
-      game.leaveRoom(player);
-      if (room) broadcastRoom(room, { t: 'room_update', players: roomPlayers(room) });
-      if (game.playersByDevice.get(player.deviceId) === player) {
-        game.playersByDevice.delete(player.deviceId);
-      }
-    }
-  });
-  ws.on('error', () => { /* ignore */ });
-});
-
-// ---- 每 100ms 广播 snapshot ----
-setInterval(() => {
-  for (const room of [...game.rooms.values()]) {
-    try {
-      game.tickRoom(room);
-    } catch (e) {
-      console.error('[tick]', room.code, e.message);
-      continue;
-    }
-    const snap = game.snapshotFor(room);
-    for (const p of [...room.players.values()]) {
-      if (!p.ws) continue;
-      wsSend(p.ws, snap);
-      flushPlayer(p.ws, p);
-    }
-  }
-  // 拍卖行过期清理（每分钟级频率即可，这里顺带每 tick 检查一次到期表）
-  try { store.expireDueListings(); } catch (_) { /* ignore */ }
-}, game.TICK_MS);
 
 // ---------------------------------------------------------------- 启动
 const restored = backup.restoreIfEmpty(store);

@@ -54,7 +54,7 @@ async function actionsErr(base, pid, action, args = {}) {
   return j.error || null;
 }
 
-test('actions 兼容层：存档 / 认领 / 房间 / 拍卖行', async (t) => {
+test('actions 兼容层：存档 / 认领 / 世界 / 拍卖行', async (t) => {
   const dataDir = makeTmpDir('actions');
   await seedIsolated(dataDir);
   const srv = await startServer(dataDir, PORT, CLAIM_CODE);
@@ -118,105 +118,82 @@ test('actions 兼容层：存档 / 认领 / 房间 / 拍卖行', async (t) => {
   const rb = await actions(base, PID_B, 'listSaves', {});
   assert.ok(rb.slots.every((s) => s.save === null), '未认领设备 5 位全空');
 
-  // --- 房间：建房 / 进房 / 心跳共享 / 换层 / 洞口 / 离房 / 满房 ---
+  // --- 世界：进图即进世界 / 心跳成员与 Boss / 全图怪 / 离图 / 无人数上限 / 层隔离 ---
   const meA = { playerId: PID_A, name: '慕尼黑好炸药', classId: 'mage', level: 11, maxHp: 300 };
   const meB = { playerId: PID_B, name: '路人乙', classId: 'warrior', level: 5, maxHp: 500 };
-  const created = await actions(base, PID_A, 'createRoom', { ...meA, stageKey: '19', layer: 0 });
-  assert.equal(created.ok, true);
-  assert.match(created.code, /^[A-Z0-9]{5}$/);
-  const code = created.code;
-  const badJoin = await actions(base, PID_B, 'joinRoom', { ...meB, code: 'ZZZZZ' });
-  assert.equal(badJoin.ok, false);
-  const joined = await actions(base, PID_B, 'joinRoom', { ...meB, code });
-  assert.equal(joined.ok, true);
-  assert.equal(joined.stageKey, '19');
-  assert.equal(joined.layer, 0);
+  assert.ok(await actionsErr(base, PID_A, 'joinWorld', { ...meA, worldKey: '99:0', x: 0, y: 0 }),
+    '不存在的世界应报错');
+  const jA = await actions(base, PID_A, 'joinWorld', { ...meA, worldKey: '19:0', x: 0, y: 0 });
+  assert.equal(jA.ok, true);
+  assert.equal(jA.worldKey, '19:0');
+  assert.ok(jA.monsters.length > 0, '进世界应看到怪');
+  assert.equal(jA.boss.state, 1, '进世界时 Boss 应活着');
+  assert.equal(jA.memberCount, 1);
+  const jB = await actions(base, PID_B, 'joinWorld', { ...meB, worldKey: '19:0', x: 0, y: 0 });
+  assert.equal(jB.ok, true);
+  assert.equal(jB.memberCount, 2);
+  const idsA = new Set(jA.monsters.map((m) => m.id));
+  assert.ok(jB.monsters.some((m) => idsA.has(m.id)), '同世界两人应看到同一批怪');
+  // 心跳：世界全体成员、Boss 状态、共享击杀恒为 0（经验改走死亡事件）
   let hb = await actions(base, PID_A, 'heartbeat', {
-    ...meA, code, x: 10, y: 20, hp: 280, layer: 0,
-    killsDelta: 5, bossSpawnMax: 1000, bossDamage: 300, advanceLayer: -1, holeKilled: false, gear: 'g1',
+    ...meA, worldKey: '19:0', x: 10, y: 20, hp: 280, xpDelta: 0, gear: 'g1',
   });
   assert.equal(hb.ok, true);
-  assert.equal(hb.sharedKills, 5);
-  assert.equal(hb.bossMax, 1000);
-  assert.equal(hb.bossHp, 700);
+  assert.equal(hb.stageKey, '19');
+  assert.equal(hb.layer, 0);
+  assert.equal(hb.sharedKills, 0);
+  assert.ok(hb.bossHp > 0 && hb.bossMax > 0, 'Boss 血量应大于 0');
   assert.equal(hb.bossState, 1);
   assert.equal(hb.members.length, 2);
+  assert.equal(hb.members.find((m) => m.playerId === PID_A).gear, 'g1');
+  // worldMap：全图怪
+  const map = await actions(base, PID_A, 'worldMap', { playerId: PID_A, worldKey: '19:0' });
+  assert.equal(map.ok, true);
+  assert.equal(map.monsters.length, 341, 'stage 19 全图应为 341 只怪');
+  // 离图：A 离开后 worldSync 回 ok:false（已不在世界里），B 仍在世界里只剩 1 人；
+  // 注意 heartbeat 会把人加回世界（重进），故不用 heartbeat 断言“已离开”
+  await actions(base, PID_A, 'leaveWorld', { playerId: PID_A, worldKey: '19:0' });
+  const gone = await actions(base, PID_A, 'worldSync', {
+    playerId: PID_A, worldKey: '19:0', x: 0, y: 0, knownRev: -1,
+  });
+  assert.equal(gone.ok, false, '离图后 worldSync 应回 ok:false');
   hb = await actions(base, PID_B, 'heartbeat', {
-    ...meB, code, x: 30, y: 40, hp: 500, layer: 0,
-    killsDelta: 0, bossSpawnMax: 0, bossDamage: 700, advanceLayer: -1, holeKilled: true, gear: '',
-  });
-  assert.equal(hb.bossHp, 0);
-  assert.equal(hb.bossState, 2);
-  assert.equal(hb.holeKilled, true);
-  assert.equal(hb.members.find((m) => m.playerId === PID_A).gear, 'g1', '空 gear 不覆盖已有外观');
-  hb = await actions(base, PID_A, 'heartbeat', {
-    ...meA, code, x: 0, y: 0, hp: 300, layer: 1,
-    killsDelta: 0, bossSpawnMax: 0, bossDamage: 0, advanceLayer: 1, holeKilled: false, gear: '',
-  });
-  assert.equal(hb.layer, 1);
-  assert.equal(hb.sharedKills, 0, '换层清共享击杀');
-  assert.equal(hb.bossState, 0, '换层清 Boss');
-  await actions(base, PID_B, 'leaveRoom', { code, playerId: PID_B });
-  hb = await actions(base, PID_A, 'heartbeat', {
-    ...meA, code, x: 0, y: 0, hp: 300, layer: 1,
-    killsDelta: 0, bossSpawnMax: 0, bossDamage: 0, advanceLayer: -1, holeKilled: false, gear: '',
+    ...meB, worldKey: '19:0', x: 30, y: 40, hp: 500, xpDelta: 0,
   });
   assert.equal(hb.members.length, 1);
-  // 满 4 人：第 5 人拒绝
-  for (let i = 0; i < 3; i++) {
-    const p = `ptest-device-x0${i}`;
-    const j = await actions(base, p, 'joinRoom', {
-      code, playerId: p, name: `路人${i}`, classId: 'mage', level: 1, maxHp: 100,
-    });
-    assert.equal(j.ok, true, `第 ${i + 3} 人应能进房`);
-  }
-  const full = await actions(base, 'ptest-device-x99', 'joinRoom', {
-    code, playerId: 'ptest-device-x99', name: '路人满', classId: 'mage', level: 1, maxHp: 100,
+  // heartbeat 即重进：A 再心跳一次就回世界（成员变回 2 人）
+  hb = await actions(base, PID_A, 'heartbeat', {
+    ...meA, worldKey: '19:0', x: 0, y: 0, hp: 300, xpDelta: 0,
   });
-  assert.equal(full.ok, false);
-  assert.match(full.reason, /已满/);
-  await actions(base, PID_A, 'leaveRoom', { code, playerId: PID_A });
-  for (let i = 0; i < 3; i++) {
-    await actions(base, `ptest-device-x0${i}`, 'leaveRoom', { code, playerId: `ptest-device-x0${i}` });
+  assert.equal(hb.ok, true, 'heartbeat 会把离图玩家加回世界');
+  assert.equal(hb.members.length, 2);
+  await actions(base, PID_A, 'leaveWorld', { playerId: PID_A, worldKey: '19:0' });
+  // 世界无 4 人上限：第 3–7 人也能进同一世界
+  await actions(base, PID_A, 'joinWorld', { ...meA, worldKey: '19:0', x: 0, y: 0 });
+  for (let i = 0; i < 5; i++) {
+    const pid = `ptest-device-x0${i}`;
+    const j = await actions(base, pid, 'joinWorld', {
+      playerId: pid, name: `路人${i}`, classId: 'mage', level: 1, maxHp: 100,
+      worldKey: '19:0', x: 0, y: 0,
+    });
+    assert.equal(j.ok, true, `第 ${i + 3} 人应能进世界（无人数上限）`);
   }
-  const gone = await actions(base, PID_B, 'joinRoom', { ...meB, code });
-  assert.equal(gone.ok, false, '全员离房后房间应解散');
-
-  // --- 房间列表：只列未满员的房，含房主/地图/人数/成员 ---
-  const c2 = await actions(base, PID_A, 'createRoom', { ...meA, stageKey: '20', layer: 0 });
-  assert.equal(c2.ok, true);
-  const code2 = c2.code;
-  await actions(base, PID_B, 'joinRoom', { ...meB, code: code2 });
-  let listedRooms = await actions(base, PID_A, 'listRooms', {});
-  assert.equal(listedRooms.rooms.length, 1, '应列出 1 间未满房');
-  const row = listedRooms.rooms[0];
-  assert.equal(row.code, code2);
-  assert.equal(row.stageKey, '20');
-  assert.equal(row.hostName, '慕尼黑好炸药');
-  assert.equal(row.memberCount, 2);
-  assert.equal(row.members.length, 2);
-  assert.equal(row.members[0].name, '慕尼黑好炸药', '房主排第一');
-  assert.equal(row.members[1].name, '路人乙');
-  assert.equal(row.members[1].classId, 'warrior');
-  assert.equal(row.members[1].level, 5);
-  // 满 4 人后不再列出
-  for (let i = 0; i < 2; i++) {
-    const p = `ptest-device-y0${i}`;
-    await actions(base, p, 'joinRoom', { code: code2, playerId: p, name: `路人${i}`, classId: 'mage', level: 1, maxHp: 100 });
+  hb = await actions(base, PID_B, 'heartbeat', {
+    ...meB, worldKey: '19:0', x: 30, y: 40, hp: 500, xpDelta: 0,
+  });
+  assert.equal(hb.members.length, 7, '同一世界应有 7 人');
+  for (let i = 0; i < 5; i++) {
+    await actions(base, `ptest-device-x0${i}`, 'leaveWorld', { playerId: `ptest-device-x0${i}`, worldKey: '19:0' });
   }
-  listedRooms = await actions(base, PID_A, 'listRooms', {});
-  assert.equal(listedRooms.rooms.length, 0, '满员房间不应出现在列表里');
-  // 一人离开后重新出现
-  await actions(base, 'ptest-device-y00', 'leaveRoom', { code: code2, playerId: 'ptest-device-y00' });
-  listedRooms = await actions(base, PID_A, 'listRooms', {});
-  assert.equal(listedRooms.rooms.length, 1);
-  assert.equal(listedRooms.rooms[0].memberCount, 3);
-  // 全员离开后房间解散，列表为空
-  await actions(base, PID_A, 'leaveRoom', { code: code2, playerId: PID_A });
-  await actions(base, PID_B, 'leaveRoom', { code: code2, playerId: PID_B });
-  await actions(base, 'ptest-device-y01', 'leaveRoom', { code: code2, playerId: 'ptest-device-y01' });
-  listedRooms = await actions(base, PID_A, 'listRooms', {});
-  assert.equal(listedRooms.rooms.length, 0);
+  await actions(base, PID_A, 'leaveWorld', { playerId: PID_A, worldKey: '19:0' });
+  await actions(base, PID_B, 'leaveWorld', { playerId: PID_B, worldKey: '19:0' });
+  // 层隔离：骷髅洞穴 0 层与 1 层是两个世界
+  const j0 = await actions(base, PID_A, 'joinWorld', { ...meA, worldKey: '4:0', x: 0, y: 0 });
+  const j1 = await actions(base, PID_B, 'joinWorld', { ...meB, worldKey: '4:1', x: 0, y: 0 });
+  assert.equal(j0.memberCount, 1);
+  assert.equal(j1.memberCount, 1);
+  await actions(base, PID_A, 'leaveWorld', { playerId: PID_A, worldKey: '4:0' });
+  await actions(base, PID_B, 'leaveWorld', { playerId: PID_B, worldKey: '4:1' });
 
   // --- 拍卖行：上架 → 列表 → 购买 → 双方领取；下架 → 领取退回；到期 → 领取退回 ---
   const sword = { uid: 101, name: '测试剑', slot: 'weapon', tier: 1, price: 0 };
@@ -291,7 +268,7 @@ test('actions 兼容层：存档 / 认领 / 房间 / 拍卖行', async (t) => {
   assert.equal(noCookieGame.headers.get('location'), '/');
 });
 
-test('组队经验与 Roll 点：xpDelta 累计 / startRoll / submitRoll / claimRolls', async (t) => {
+test('世界 Roll 点：startRoll / submitRoll / claimRolls（整图共享，不同世界看不到）', async (t) => {
   const dataDir = makeTmpDir('actions-team');
   await seedIsolated(dataDir);
   const srv = await startServer(dataDir, PORT + 2, CLAIM_CODE);
@@ -301,45 +278,25 @@ test('组队经验与 Roll 点：xpDelta 累计 / startRoll / submitRoll / claim
   const meA = { playerId: PID_A, name: '慕尼黑好炸药', classId: 'mage', level: 11, maxHp: 300 };
   const meB = { playerId: PID_B, name: '路人乙', classId: 'warrior', level: 5, maxHp: 500 };
   const meC = { playerId: 'ptest-device-c01', name: '路人丙', classId: 'taoist', level: 3, maxHp: 200 };
-  const created = await actions(base, PID_A, 'createRoom', { ...meA, stageKey: '19', layer: 0 });
-  assert.equal(created.ok, true);
-  const code = created.code;
-  await actions(base, PID_B, 'joinRoom', { ...meB, code });
-  await actions(base, meC.playerId, 'joinRoom', { ...meC, code });
-  // C 先心跳到 1 层，后面 Roll 只面向 0 层成员
-  await actions(base, meC.playerId, 'heartbeat', {
-    ...meC, code, x: 0, y: 0, hp: 200, layer: 1, xpDelta: 0,
-  });
+  await actions(base, PID_A, 'joinWorld', { ...meA, worldKey: '19:0', x: 0, y: 0 });
+  await actions(base, PID_B, 'joinWorld', { ...meB, worldKey: '19:0', x: 0, y: 0 });
+  // C 在另一个世界（stage 20），不应看到 19:0 世界的 Roll
+  await actions(base, meC.playerId, 'joinWorld', { ...meC, worldKey: '20:0', x: 0, y: 0 });
 
-  // --- 组队经验：A 上报 xpDelta，B 的心跳里看到 A 的 xpTotal 累计 ---
-  let hb = await actions(base, PID_A, 'heartbeat', {
-    ...meA, code, x: 0, y: 0, hp: 300, layer: 0, xpDelta: 120,
-  });
-  assert.equal(hb.members.find((m) => m.playerId === PID_A).xpTotal, 120);
-  hb = await actions(base, PID_B, 'heartbeat', {
-    ...meB, code, x: 0, y: 0, hp: 500, layer: 0, xpDelta: 0,
-  });
-  assert.equal(hb.members.find((m) => m.playerId === PID_A).xpTotal, 120);
-  assert.equal(hb.members.find((m) => m.playerId === PID_B).xpTotal, 0);
-  hb = await actions(base, PID_A, 'heartbeat', {
-    ...meA, code, x: 0, y: 0, hp: 300, layer: 0, xpDelta: 80,
-  });
-  assert.equal(hb.members.find((m) => m.playerId === PID_A).xpTotal, 200, 'xpTotal 应累计');
-
-  // --- Roll：非法物品拒绝；合法发起后同层双方在心跳里看到 Roll，不同层看不到 ---
+  // --- Roll：非法物品拒绝；合法发起后同世界双方在心跳里看到 Roll，不同世界看不到 ---
   const item = { uid: 201, name: '测试紫装', slot: 'weapon', tier: 3 };
   const bad = await actions(base, PID_A, 'startRoll', {
-    code, playerId: PID_A, name: meA.name, layer: 0, itemJson: '{"nope":1}',
+    worldKey: '19:0', playerId: PID_A, name: meA.name, layer: 0, itemJson: '{"nope":1}',
   });
   assert.equal(bad.ok, false);
   const started = await actions(base, PID_A, 'startRoll', {
-    code, playerId: PID_A, name: meA.name, layer: 0, itemJson: JSON.stringify(item),
+    worldKey: '19:0', playerId: PID_A, name: meA.name, layer: 0, itemJson: JSON.stringify(item),
   });
   assert.equal(started.ok, true);
   assert.ok(started.id > 0);
   const rollId = started.id;
-  hb = await actions(base, PID_B, 'heartbeat', {
-    ...meB, code, x: 0, y: 0, hp: 500, layer: 0, xpDelta: 0,
+  let hb = await actions(base, PID_B, 'heartbeat', {
+    ...meB, worldKey: '19:0', x: 0, y: 0, hp: 500, xpDelta: 0,
   });
   assert.equal(hb.rolls.length, 1);
   assert.equal(hb.rolls[0].status, 'active');
@@ -347,9 +304,9 @@ test('组队经验与 Roll 点：xpDelta 累计 / startRoll / submitRoll / claim
   assert.deepEqual(
     hb.rolls[0].entries.map((e) => e.value), [null, null], '未掷点前两人都是 null');
   const hbC = await actions(base, meC.playerId, 'heartbeat', {
-    ...meC, code, x: 0, y: 0, hp: 200, layer: 1, xpDelta: 0,
+    ...meC, worldKey: '20:0', x: 0, y: 0, hp: 200, xpDelta: 0,
   });
-  assert.equal(hbC.rolls.length, 0, '不同层成员不应看到 Roll');
+  assert.equal(hbC.rolls.length, 0, '不同世界成员不应看到 Roll');
   // 非参与者掷点应被拒绝
   const outsider = await actions(base, meC.playerId, 'submitRoll', { id: rollId, playerId: meC.playerId });
   assert.equal(outsider.ok, false);
@@ -364,7 +321,7 @@ test('组队经验与 Roll 点：xpDelta 累计 / startRoll / submitRoll / claim
     const rb = await actions(base, PID_B, 'submitRoll', { id: rollId, playerId: PID_B });
     assert.equal(rb.ok, true);
     hb = await actions(base, PID_A, 'heartbeat', {
-      ...meA, code, x: 0, y: 0, hp: 300, layer: 0, xpDelta: 0,
+      ...meA, worldKey: '19:0', x: 0, y: 0, hp: 300, xpDelta: 0,
     });
     const roll = hb.rolls.find((r) => r.id === rollId);
     assert.ok(roll, '心跳应带回 Roll');
