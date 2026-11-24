@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>聊天室 · 热血传奇国服联机版</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #17130c; color: #f2e8d5;
+    display: flex; flex-direction: column; height: 100dvh;
+  }
+  header {
+    padding: 12px 14px 10px; background: #241c10; border-bottom: 1px solid #4a3a1e;
+    display: flex; align-items: center; gap: 10px; flex: none;
+  }
+  header h1 { font-size: 17px; margin: 0; flex: 1; }
+  header h1 small { display: block; font-size: 11px; color: #b8a67e; font-weight: normal; margin-top: 2px; }
+  header a, header button {
+    font-size: 13px; color: #ffd97a; background: none; border: 1px solid #6b5426;
+    border-radius: 8px; padding: 6px 10px; text-decoration: none; cursor: pointer;
+  }
+  #log {
+    flex: 1; overflow-y: auto; padding: 12px 12px 8px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .msg { max-width: 82%; padding: 8px 11px; border-radius: 12px; line-height: 1.45; word-break: break-word; }
+  .msg .meta { font-size: 11px; color: #b8a67e; margin-bottom: 3px; }
+  .msg .text { font-size: 15px; white-space: pre-wrap; }
+  .msg.other { align-self: flex-start; background: #2c2415; border: 1px solid #4a3a1e; border-bottom-left-radius: 4px; }
+  .msg.mine { align-self: flex-end; background: #7a5a17; border-bottom-right-radius: 4px; }
+  .msg.mine .meta { color: #e8d5a0; }
+  .empty { color: #8a7a58; text-align: center; font-size: 13px; margin-top: 30px; }
+  #composer {
+    flex: none; display: flex; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    background: #241c10; border-top: 1px solid #4a3a1e;
+  }
+  #composer input {
+    flex: 1; font-size: 16px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid #6b5426; background: #17130c; color: #f2e8d5; outline: none; min-width: 0;
+  }
+  #composer input:focus { border-color: #c9a13b; }
+  #composer button {
+    font-size: 16px; padding: 0 18px; border-radius: 10px; border: none;
+    background: #c9a13b; color: #241c10; font-weight: bold; cursor: pointer; flex: none;
+  }
+  #composer button:disabled { opacity: 0.5; }
+  #nameGate {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.72);
+    display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 10;
+  }
+  #nameGate .card {
+    background: #241c10; border: 1px solid #6b5426; border-radius: 14px;
+    padding: 22px 18px; width: 100%; max-width: 320px; text-align: center;
+  }
+  #nameGate h2 { margin: 0 0 6px; font-size: 18px; }
+  #nameGate p { margin: 0 0 14px; font-size: 13px; color: #b8a67e; }
+  #nameGate input {
+    width: 100%; font-size: 16px; padding: 11px 12px; border-radius: 10px;
+    border: 1px solid #6b5426; background: #17130c; color: #f2e8d5; outline: none; margin-bottom: 12px;
+  }
+  #nameGate button {
+    width: 100%; font-size: 16px; padding: 11px; border-radius: 10px; border: none;
+    background: #c9a13b; color: #241c10; font-weight: bold; cursor: pointer;
+  }
+  #nameGate .err { color: #ff9d8a; font-size: 12px; min-height: 16px; margin-top: 8px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>💬 聊天室<small>国服联机版 · 消息保存在服务器内存，重启会清空</small></h1>
+  <button id="renameBtn" type="button">改名</button>
+  <a href="/">返回游戏</a>
+</header>
+<div id="log"><div class="empty">还没有消息，打个招呼吧 👋</div></div>
+<div id="composer">
+  <input id="text" type="text" placeholder="输入消息…" autocomplete="off" maxlength="500">
+  <button id="sendBtn" type="button">发送</button>
+</div>
+<div id="nameGate" class="hidden">
+  <div class="card">
+    <h2>起个名字</h2>
+    <p>进聊天室先起个名字，下次打开不用再输</p>
+    <input id="nameInput" type="text" placeholder="比如：慕尼黑好炸药" maxlength="12" autocomplete="off">
+    <button id="nameBtn" type="button">进入聊天室</button>
+    <div class="err" id="nameErr"></div>
+  </div>
+</div>
+<script>
+(function () {
+  var NAME_KEY = 'lg_chat_name';
+  var logEl = document.getElementById('log');
+  var textEl = document.getElementById('text');
+  var sendBtn = document.getElementById('sendBtn');
+  var gate = document.getElementById('nameGate');
+  var nameInput = document.getElementById('nameInput');
+  var nameBtn = document.getElementById('nameBtn');
+  var nameErr = document.getElementById('nameErr');
+  var myName = (localStorage.getItem(NAME_KEY) || '').trim();
+  var lastId = 0;
+  var started = false;
+
+  function fmtTime(ms) {
+    var d = new Date(ms);
+    var h = String(d.getHours()).padStart(2, '0');
+    var m = String(d.getMinutes()).padStart(2, '0');
+    return h + ':' + m;
+  }
+  function nearBottom() {
+    return logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 120;
+  }
+  function appendMsg(m) {
+    var empty = logEl.querySelector('.empty');
+    if (empty) empty.remove();
+    var div = document.createElement('div');
+    div.className = 'msg ' + (m.name === myName ? 'mine' : 'other');
+    var meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.textContent = m.name + ' · ' + fmtTime(m.time);
+    var text = document.createElement('div');
+    text.className = 'text';
+    text.textContent = m.text;
+    div.appendChild(meta);
+    div.appendChild(text);
+    logEl.appendChild(div);
+  }
+  function fetchNew() {
+    fetch('/chat/messages?since=' + lastId)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok || !data.messages) return;
+        var stick = nearBottom();
+        data.messages.forEach(function (m) {
+          if (m.id > lastId) lastId = m.id;
+          appendMsg(m);
+        });
+        if (data.messages.length && stick) logEl.scrollTop = logEl.scrollHeight;
+      })
+      .catch(function () { /* 下一轮再试 */ });
+  }
+  function send() {
+    var text = textEl.value.trim();
+    if (!text) return;
+    sendBtn.disabled = true;
+    fetch('/chat/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: myName, text: text }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok) { alert(data.error || '发送失败'); return; }
+        textEl.value = '';
+        fetchNew();
+      })
+      .catch(function () { alert('发送失败，检查网络后重试'); })
+      .finally(function () { sendBtn.disabled = false; textEl.focus(); });
+  }
+  function enter(name) {
+    myName = name.trim();
+    if (myName.length < 1 || myName.length > 12) {
+      nameErr.textContent = '名字 1-12 个字';
+      return;
+    }
+    localStorage.setItem(NAME_KEY, myName);
+    gate.classList.add('hidden');
+    if (!started) {
+      started = true;
+      fetchNew();
+      setInterval(fetchNew, 2000);
+    }
+  }
+  sendBtn.addEventListener('click', send);
+  textEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') send();
+  });
+  nameBtn.addEventListener('click', function () { enter(nameInput.value); });
+  nameInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') enter(nameInput.value);
+  });
+  document.getElementById('renameBtn').addEventListener('click', function () {
+    nameInput.value = myName;
+    nameErr.textContent = '';
+    gate.classList.remove('hidden');
+    nameInput.focus();
+  });
+
+  if (myName) {
+    gate.classList.add('hidden');
+    started = true;
+    fetchNew();
+    setInterval(fetchNew, 2000);
+  } else {
+    gate.classList.remove('hidden');
+    nameInput.focus();
+  }
+})();
+</script>
+</body>
+</html>

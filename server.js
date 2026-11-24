@@ -45,6 +45,25 @@ if (!CLAIM_CODE) {
 }
 if (!CLAIM_CODE) console.warn('[server] 警告：未找到认领码（CLAIM_CODE 或 seed/claim-code.json），认领接口将不可用');
 
+// ---------------------------------------------------------------- 聊天室（共享一间，内存存储）
+// 消息只放内存：Render 免费版磁盘是临时的、重启会丢；保留最近 200 条。
+const CHAT_MAX = 200;
+let chatSeq = 0;
+const chatLog = [];
+function chatSendMessage(name, text) {
+  const msg = { id: ++chatSeq, name, text, time: Date.now() };
+  chatLog.push(msg);
+  if (chatLog.length > CHAT_MAX) chatLog.splice(0, chatLog.length - CHAT_MAX);
+  return msg;
+}
+function chatSince(sinceId) {
+  const id = Number(sinceId) || 0;
+  return chatLog.filter((m) => m.id > id);
+}
+function validChatName(n) {
+  return typeof n === 'string' && n.trim().length >= 1 && n.trim().length <= 12;
+}
+
 // ---------------------------------------------------------------- 工具
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -364,6 +383,25 @@ const server = http.createServer((req, res) => {
   if (req.url.startsWith('/api/')) return handleApi(req, res);
   const noQuery = req.url.split('?')[0];
   if (noQuery === '/actions' || noQuery === '/game/actions') return actionsShim.handleActions(req, res);
+  if (noQuery === '/chat/messages' && req.method === 'GET') {
+    const since = new URL(req.url, 'http://x').searchParams.get('since');
+    return sendJson(res, 200, { ok: true, messages: chatSince(since) });
+  }
+  if (noQuery === '/chat/send' && req.method === 'POST') {
+    return (async () => {
+      try {
+        const body = await parseJsonBody(req);
+        const name = String(body.name || '').trim();
+        const text = String(body.text || '').trim();
+        if (!validChatName(name)) return sendJson(res, 400, { ok: false, error: '名字 1-12 个字' });
+        if (text.length < 1 || text.length > 500) return sendJson(res, 400, { ok: false, error: '消息 1-500 个字' });
+        const msg = chatSendMessage(name, text);
+        return sendJson(res, 200, { ok: true, message: msg });
+      } catch (e) {
+        return sendJson(res, 400, { ok: false, error: e.message || '发送失败' });
+      }
+    })();
+  }
   return serveStatic(req, res);
 });
 
