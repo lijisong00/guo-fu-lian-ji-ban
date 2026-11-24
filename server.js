@@ -231,6 +231,17 @@ async function handleApi(req, res) {
         claimUsed: store.isClaimUsed(),
       });
     }
+    // 全服快照导出（2026-11-24，只读）：返回 dumpAll() 的全部游戏数据
+    // （角色、拍卖在售、待领取、artifact 拍卖、认领标记），格式与
+    // seed/characters-snapshot.json 一致。每次部署前调它取最新快照、
+    // 更新快照文件再推送，下次部署构建时 migrate 按快照自动恢复。
+    // 只含游戏数据，不带认领码（认领码从不在 meta 里）。
+    if (req.method === 'GET' && url === '/api/snapshot') {
+      return sendJson(res, 200, {
+        ok: true, version: 1, exportedAt: new Date().toISOString(),
+        counts: store.counts(), ...store.dumpAll(),
+      });
+    }
     if (req.method === 'GET' && url === '/api/characters') {
       const deviceId = query.get('deviceId') || req.headers['x-device-id'];
       if (!validDeviceId(deviceId)) return sendJson(res, 400, { ok: false, error: 'deviceId 不对' });

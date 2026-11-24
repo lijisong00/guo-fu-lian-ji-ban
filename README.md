@@ -59,16 +59,24 @@ node server.js   # 启动，默认 http://localhost:3000
 
 ## 部署到 Render 免费版
 
-仓库里已有 `render.yaml`（web service、Node 环境、Free 套餐、启动命令 `node server.js`、健康检查 `/api/health`）。步骤：
+仓库里已有 `render.yaml`（web service、Node 环境、Free 套餐、构建命令 `npm install && npm run migrate`、启动命令 `node server.js`、健康检查 `/api/health`）。步骤：
 
 1. 把本项目推到 GitHub 仓库（例如 `lijisong00/guo-fu-lian-ji-ban`）。
-2. 打开 [render.com](https://render.com) 注册（建议用 GitHub 账号注册，不用信用卡，邮箱注册即可）→ New → Web Service → 选这个仓库 → Free 套餐 → Deploy。
+2. 打开 [render.com](https://render.com) 注册（建议用 GitHub 账号注册，不用信用卡，邮箱注册即可）→ New → Web Service → 选这个仓库 → Free 套餐 → Deploy。每次部署的构建阶段都会跑 `npm run migrate`，按快照自动把角色种回库里。
 3. 部署成功后把网址发给朋友，就能打开玩、建房、输 5 位房间码联机。
 4. 部署后尽快用认领码认领三个角色（码在 Render 环境变量 CLAIM_CODE 里，不写进仓库）。
 
+**每次部署固定流程：先快照、再推送（不要跳过）。** Render 免费版每次部署都会清空磁盘，部署前必须先把线上最新全服状态取下来：
+
+```bash
+curl -s https://guo-fu-lian-ji-ban.onrender.com/api/snapshot > seed/characters-snapshot.json
+```
+
+取完检查一遍（角色名字/数量对得上、里面没有认领码），再推送。推送后构建时 `migrate` 按快照原样恢复角色（保留原设备、槽位、等级、装备与认领状态），玩家打开游戏直接接着玩。快照文件放在公开仓库里，只有游戏角色数据（名字/职业/等级/装备/金币），没有密码、没有真实个人信息；认领码绝不进快照、也不进仓库。详见 `docs/deploy-render.md` 的“全服角色快照”一节。
+
 **免费版两点注意：**
 - **15 分钟没人玩会休眠**，下次打开要等 30–60 秒唤醒。客户端首个请求 65 秒超时、最多重试 2 次，期间显示“服务器唤醒中，请稍等……”，不是打不开。
-- **硬盘是临时的**，重启或重新部署会丢数据；免费 PostgreSQL 30 天过期也不能用。所以本项目自带自动备份恢复：每次存档写入后，把全部角色存档与拍卖行数据写一份 JSON 备份到 `data/backup/`（保留最近 7 天滚动备份）；服务器启动时如果数据库是空的，自动从最新备份恢复。**边界要清楚：备份文件和数据库在同一块临时硬盘上，它防的是库损坏/误删与同一次部署内的丢失；Render 免费版一重新部署还是会清空整个硬盘（含备份）。想彻底稳妥，升级到 Render 7 美元/月的付费实例加持久硬盘即可，代码不用改。**
+- **硬盘是临时的**，重启或重新部署会丢数据；免费 PostgreSQL 30 天过期也不能用。所以本项目自带自动备份恢复：每次存档写入后，把全部角色存档与拍卖行数据写一份 JSON 备份到 `data/backup/`（保留最近 7 天滚动备份）；服务器启动时如果数据库是空的，自动从最新备份恢复。**边界要清楚：备份文件和数据库在同一块临时硬盘上，它防的是库损坏/误删与同一次部署内的丢失；Render 免费版一重新部署还是会清空整个硬盘（含备份）。跨部署不丢角色靠的是全服角色快照（见下“每次部署固定流程”）：部署前先调 `GET /api/snapshot` 取最新快照存进 `seed/characters-snapshot.json` 再推送，构建时 `migrate` 按快照自动恢复。**
 
 ## VPS 部署备选（以后用）
 

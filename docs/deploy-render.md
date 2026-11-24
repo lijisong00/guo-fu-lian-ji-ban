@@ -11,7 +11,7 @@
 2. 打开 render.com → New → Web Service → 选仓库。
 3. 套餐选 **Free** → Deploy。
 4. Render 按 `render.yaml` 自动执行：
-   - `buildCommand: npm install`
+   - `buildCommand: npm install && npm run migrate`
    - `startCommand: node server.js`
    - `healthCheckPath: /api/health`
 
@@ -23,13 +23,52 @@ services:
     name: guo-fu-lian-ji-ban
     env: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install && npm run migrate
     startCommand: node server.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
 ```
+
+## 全服角色快照：每次部署固定流程（先快照、再推送）
+
+Render 免费版每次部署都会清空磁盘（`game.db` 与 `data/backup/` 全丢），
+所以部署前必须先把线上最新全服状态取下来、放进仓库，再推送。
+这是固定步骤，每次部署都做，不要跳过：
+
+```bash
+# 1）部署前：调线上导出接口取最新快照（只读，返回全部角色、拍卖在售、
+#    待领取与认领标记；只有游戏数据，不带认领码）
+curl -s https://guo-fu-lian-ji-ban.onrender.com/api/snapshot > seed/characters-snapshot.json
+
+# 2）检查一遍：角色名字/数量与线上对得上；文件里不能有认领码
+#    （快照格式里根本没有认领码字段，grep 到东西就说明文件不对）
+grep -ci claimcode seed/characters-snapshot.json   # 应输出 0（没有才对）
+node -e "const s=require('./seed/characters-snapshot.json'); console.log(s.counts, s.characters.map(c=>c.name).join(','))"
+
+# 3）再推送（走净化副本，见仓库推送流程）。推送后 Render 构建时跑
+#    `npm run migrate`，按快照原样恢复角色，玩家打开游戏直接接着玩。
+```
+
+机制（`lib/snapshot.js` + `scripts/migrate.mjs` + `GET /api/snapshot`）：
+
+- 快照文件 `seed/characters-snapshot.json` 与 `lib/db.js` 的 `dumpAll()`
+  同格式（角色行含 device_id / slot / name / cls / level / xp / gold /
+  data / claimed_at / created_at / updated_at），`GET /api/snapshot`
+  的返回可直接保存为快照文件。
+- 快照是权威来源：构建时 `migrate` 先按快照恢复全部角色（保留原
+  device_id、槽位、名字、职业、等级、经验、金币、装备、claimed_at），
+  再补种快照里没有的种子角色；名字已在库里的跳过、不重复种。
+- 认领标记按快照里的实际状态恢复：快照里有已认领角色，`claimUsed`
+  就是 true；快照全是未认领角色，`claimUsed` 为 false，用户部署后
+  仍需用认领码重新认领。
+- 快照文件放在公开仓库里，只有游戏角色数据（名字/职业/等级/装备/
+  金币），没有密码、没有真实个人信息；认领码绝不进快照。
+
+注意：`data/backup/` 的滚动备份只防同一次部署内的库损坏/误删，
+跨部署恢复全靠上面这份仓库里的快照。不要付费磁盘、不要外部数据库
+（用户已明确拒绝这两条路）。
 
 ## 服务端要点
 
