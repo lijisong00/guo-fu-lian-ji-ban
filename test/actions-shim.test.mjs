@@ -255,6 +255,101 @@ test('actions 兼容层：存档 / 认领 / 房间 / 拍卖行', async (t) => {
   assert.equal(noCookieGame.headers.get('location'), '/');
 });
 
+test('组队经验与 Roll 点：xpDelta 累计 / startRoll / submitRoll / claimRolls', async (t) => {
+  const dataDir = makeTmpDir('actions-team');
+  await seedIsolated(dataDir);
+  const srv = await startServer(dataDir, PORT + 2, CLAIM_CODE);
+  t.after(() => stopServer(srv));
+  const { base } = srv;
+
+  const meA = { playerId: PID_A, name: '慕尼黑好炸药', classId: 'mage', level: 11, maxHp: 300 };
+  const meB = { playerId: PID_B, name: '路人乙', classId: 'warrior', level: 5, maxHp: 500 };
+  const meC = { playerId: 'ptest-device-c01', name: '路人丙', classId: 'taoist', level: 3, maxHp: 200 };
+  const created = await actions(base, PID_A, 'createRoom', { ...meA, stageKey: '19', layer: 0 });
+  assert.equal(created.ok, true);
+  const code = created.code;
+  await actions(base, PID_B, 'joinRoom', { ...meB, code });
+  await actions(base, meC.playerId, 'joinRoom', { ...meC, code });
+  // C 先心跳到 1 层，后面 Roll 只面向 0 层成员
+  await actions(base, meC.playerId, 'heartbeat', {
+    ...meC, code, x: 0, y: 0, hp: 200, layer: 1, xpDelta: 0,
+  });
+
+  // --- 组队经验：A 上报 xpDelta，B 的心跳里看到 A 的 xpTotal 累计 ---
+  let hb = await actions(base, PID_A, 'heartbeat', {
+    ...meA, code, x: 0, y: 0, hp: 300, layer: 0, xpDelta: 120,
+  });
+  assert.equal(hb.members.find((m) => m.playerId === PID_A).xpTotal, 120);
+  hb = await actions(base, PID_B, 'heartbeat', {
+    ...meB, code, x: 0, y: 0, hp: 500, layer: 0, xpDelta: 0,
+  });
+  assert.equal(hb.members.find((m) => m.playerId === PID_A).xpTotal, 120);
+  assert.equal(hb.members.find((m) => m.playerId === PID_B).xpTotal, 0);
+  hb = await actions(base, PID_A, 'heartbeat', {
+    ...meA, code, x: 0, y: 0, hp: 300, layer: 0, xpDelta: 80,
+  });
+  assert.equal(hb.members.find((m) => m.playerId === PID_A).xpTotal, 200, 'xpTotal 应累计');
+
+  // --- Roll：非法物品拒绝；合法发起后同层双方在心跳里看到 Roll，不同层看不到 ---
+  const item = { uid: 201, name: '测试紫装', slot: 'weapon', tier: 3 };
+  const bad = await actions(base, PID_A, 'startRoll', {
+    code, playerId: PID_A, name: meA.name, layer: 0, itemJson: '{"nope":1}',
+  });
+  assert.equal(bad.ok, false);
+  const started = await actions(base, PID_A, 'startRoll', {
+    code, playerId: PID_A, name: meA.name, layer: 0, itemJson: JSON.stringify(item),
+  });
+  assert.equal(started.ok, true);
+  assert.ok(started.id > 0);
+  const rollId = started.id;
+  hb = await actions(base, PID_B, 'heartbeat', {
+    ...meB, code, x: 0, y: 0, hp: 500, layer: 0, xpDelta: 0,
+  });
+  assert.equal(hb.rolls.length, 1);
+  assert.equal(hb.rolls[0].status, 'active');
+  assert.equal(hb.rolls[0].round, 1);
+  assert.deepEqual(
+    hb.rolls[0].entries.map((e) => e.value), [null, null], '未掷点前两人都是 null');
+  const hbC = await actions(base, meC.playerId, 'heartbeat', {
+    ...meC, code, x: 0, y: 0, hp: 200, layer: 1, xpDelta: 0,
+  });
+  assert.equal(hbC.rolls.length, 0, '不同层成员不应看到 Roll');
+  // 非参与者掷点应被拒绝
+  const outsider = await actions(base, meC.playerId, 'submitRoll', { id: rollId, playerId: meC.playerId });
+  assert.equal(outsider.ok, false);
+  // 双方掷点；平局则重掷，最多 5 轮
+  let winnerId = null;
+  for (let round = 0; round < 5; round++) {
+    const ra = await actions(base, PID_A, 'submitRoll', { id: rollId, playerId: PID_A });
+    assert.equal(ra.ok, true);
+    assert.ok(ra.value >= 1 && ra.value <= 100);
+    const ra2 = await actions(base, PID_A, 'submitRoll', { id: rollId, playerId: PID_A });
+    assert.equal(ra2.value, ra.value, '重复提交返回已掷点数');
+    const rb = await actions(base, PID_B, 'submitRoll', { id: rollId, playerId: PID_B });
+    assert.equal(rb.ok, true);
+    hb = await actions(base, PID_A, 'heartbeat', {
+      ...meA, code, x: 0, y: 0, hp: 300, layer: 0, xpDelta: 0,
+    });
+    const roll = hb.rolls.find((r) => r.id === rollId);
+    assert.ok(roll, '心跳应带回 Roll');
+    if (roll.status === 'resolved') { winnerId = roll.winnerId; break; }
+    assert.equal(roll.status, 'active', '未结算时应为 active（平局进下一轮）');
+  }
+  assert.ok(winnerId === PID_A || winnerId === PID_B, '应决出胜者');
+  // 胜者领一次，重复领为空；负者领为空
+  const loserId = winnerId === PID_A ? PID_B : PID_A;
+  const winClaim = await actions(base, winnerId, 'claimRolls', { playerId: winnerId });
+  assert.equal(winClaim.items.length, 1);
+  assert.equal(JSON.parse(winClaim.items[0]).uid, 201);
+  const winClaim2 = await actions(base, winnerId, 'claimRolls', { playerId: winnerId });
+  assert.equal(winClaim2.items.length, 0, '重复领取应为空');
+  const loseClaim = await actions(base, loserId, 'claimRolls', { playerId: loserId });
+  assert.equal(loseClaim.items.length, 0, '负者领不到装备');
+  // 不存在的 Roll 掷点应失败
+  const noRoll = await actions(base, PID_A, 'submitRoll', { id: 999999, playerId: PID_A });
+  assert.equal(noRoll.ok, false);
+});
+
 test('actions 兼容层：旧接口不受影响', async (t) => {
   const dataDir = makeTmpDir('actions-old');
   await seedIsolated(dataDir);
