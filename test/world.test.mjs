@@ -4,7 +4,8 @@
 // 覆盖：
 //   - 同图同层两玩家看到同一只怪；打怪后死亡事件两边都可见（经验发放依据）
 //   - hitMonster 校验：超射程 / 伤害 0 / 超限流 / 超大伤害钳制
-//   - Boss 死后 15 分钟重刷；普通怪死后重刷；尸王殿每小时整波（只补常驻）
+//   - 整波一小时刷新（Boss 与普通怪不到整点不回，整点一次性全回）；
+//     进图/传送不刷怪（杀掉的还死着，世界实例不删）；尸王殿每小时整波（只补常驻）
 //   - worldMap 返回全图怪；不同层互相隔离
 //   - 蓝装 Roll 整图结算；挂机玩家（60 秒无行动）收不到 Roll 弹窗
 import test from 'node:test';
@@ -32,11 +33,11 @@ test('引擎：进世界刷满怪 + 1 只 Boss（stage 19 应为 340 普 + 1 Bos
   assert.ok(w, 'stage 19 layer 0 应存在');
   assert.equal(w.monsters.size, 341, '应刷满 341 只，实际 ' + w.monsters.size);
   assert.ok(w.boss, '应有 Boss');
-  assert.equal(w.boss.bossName, '半兽勇士');
+  assert.equal(w.boss.bossName, '毒蜘蛛王');
   assert.equal(w.bossState, 1);
   const bosses = [...w.monsters.values()].filter((m) => m.boss);
   assert.equal(bosses.length, 1);
-  console.log('stage 19 世界：341 只怪，Boss 半兽勇士 hp=' + w.boss.hp);
+  console.log('stage 19 世界：341 只怪，Boss 毒蜘蛛王 hp=' + w.boss.hp);
 });
 
 test('引擎：尸王殿整波 32 只（1 通关 + 31 常驻），杀 1 只不单独补刷，整波时间到才补满', () => {
@@ -74,43 +75,49 @@ test('引擎：尸王殿整波 32 只（1 通关 + 31 常驻），杀 1 只不�
   console.log('尸王殿：进殿 32 只，杀 1 只后 2 秒仍 31 只，整波到补满 32 只');
 });
 
-test('引擎：Boss 死后 15 分钟重刷；普通怪死后 60–120 秒重刷', () => {
+test('引擎：整波一小时刷新——Boss 与普通怪死后不到整点不回，整点一次性全回', () => {
   const eng = createWorlds(worldData);
   const now = Date.now();
   const w = eng.getOrCreate(19, 0);
+  const waveAt = w.nextWaveAt;
+  assert.ok(waveAt > now, '建世界时下次整波应为未来时间');
+  assert.equal(new Date(waveAt).getMinutes(), 0, '下次整波应在整点 :00');
+  assert.equal(new Date(waveAt).getSeconds(), 0);
   const boss = w.boss;
+  const fullNormal = [...w.monsters.values()].filter((m) => !m.boss && !m.dead).length;
   eng.join(w, { playerId: 'u1', name: '甲', classId: 'war', level: 1, x: boss.x, y: boss.y, hp: 100, maxHp: 100 }, now);
+  // 杀 Boss：状态 2，不再有 15 分钟重刷时间
   const r = eng.hitMonster(w, { playerId: 'u1', monsterId: boss.id, dmg: 999999 }, now);
   assert.equal(r.ok, true, '超大伤害应被钳制后仍命中');
   assert.equal(r.dead, true, 'Boss 应被击杀');
-  assert.equal(w.bossState, 2, 'Boss 死后状态应为 2（已死待重刷）');
-  assert.equal(w.bossRespawnAt, now + 15 * 60 * 1000, 'Boss 重刷时间应为死后 15 分钟');
-  // 14 分钟后仍未刷
-  eng.tick(w, now + 14 * 60 * 1000);
-  assert.equal(w.boss, null, '14 分钟后 Boss 不应重刷');
-  // 15 分钟后刷回
-  eng.tick(w, now + 15 * 60 * 1000 + 1000);
-  assert.ok(w.boss, '15 分钟后 Boss 应重刷');
-  assert.equal(w.bossState, 1);
-  assert.equal(w.boss.bossName, '半兽勇士');
-
-  // 普通怪：杀 1 只，模拟重刷时间到应补 1 只（同种），旧 id 消失
+  assert.equal(w.bossState, 2, 'Boss 死后状态应为 2（已死待整波）');
+  assert.equal(w.boss, null);
+  // 杀 1 只普通怪
   const normal = [...w.monsters.values()].find((m) => !m.boss && !m.dead);
   const kind = normal.kind;
   const oldId = normal.id;
-  const tKill = now + 15 * 60 * 1000 + 1000;
-  eng.join(w, { playerId: 'u1', name: '甲', classId: 'war', level: 1, x: normal.x, y: normal.y, hp: 100, maxHp: 100 }, tKill);
-  const r2 = eng.hitMonster(w, { playerId: 'u1', monsterId: oldId, dmg: normal.hp }, tKill);
+  eng.join(w, { playerId: 'u1', name: '甲', classId: 'war', level: 1, x: normal.x, y: normal.y, hp: 100, maxHp: 100 }, now);
+  const r2 = eng.hitMonster(w, { playerId: 'u1', monsterId: oldId, dmg: normal.hp }, now);
   assert.equal(r2.dead, true);
-  const dead = w.monsters.get(oldId);
-  dead.respawnAt = now + 15 * 60 * 1000 + 1000; // 模拟 60–120 秒已过
-  const before = [...w.monsters.values()].filter((m) => !m.dead && !m.boss).length;
-  eng.tick(w, now + 15 * 60 * 1000 + 2000);
-  assert.equal(w.monsters.has(oldId), false, '重刷后旧 id 应被新怪替换');
-  const after = [...w.monsters.values()].filter((m) => !m.dead && !m.boss).length;
-  assert.equal(after, before + 1, '普通怪死后重刷应补满');
+  // 14 分钟后（远超旧 60–120 秒单刷窗口）：Boss 与普通怪都不回
+  eng.tick(w, now + 14 * 60 * 1000);
+  assert.equal(w.boss, null, '14 分钟后 Boss 不应回来（等整波）');
+  assert.equal(w.monsters.get(oldId).dead, true, '普通怪 14 分钟后仍应死着');
+  assert.equal([...w.monsters.values()].filter((m) => !m.boss && !m.dead).length, fullNormal - 1);
+  // 整点前 1 秒：仍不回
+  eng.tick(w, waveAt - 1000);
+  assert.equal(w.boss, null, '整点前 1 秒 Boss 不应回来');
+  assert.equal(w.monsters.get(oldId).dead, true, '整点前 1 秒普通怪仍应死着');
+  // 整点到：Boss 与普通怪一次性全回
+  eng.tick(w, waveAt + 1000);
+  assert.ok(w.boss, '整点到 Boss 应刷回');
+  assert.equal(w.bossState, 1);
+  assert.equal(w.boss.bossName, '毒蜘蛛王');
+  assert.equal(w.monsters.has(oldId), false, '整波后旧 id 应被新怪替换');
+  assert.equal([...w.monsters.values()].filter((m) => !m.boss && !m.dead).length, fullNormal, '普通怪应补满');
   assert.ok([...w.monsters.values()].some((m) => !m.dead && m.kind === kind), '应补同种怪');
-  console.log('Boss 15 分钟重刷、普通怪重刷均通过');
+  assert.ok(w.nextWaveAt > waveAt, '整波后下次整波应推到再下一个整点');
+  console.log('整波一小时刷新通过：Boss 与普通怪不到整点不回，整点一次性全回');
 });
 
 test('引擎：hitMonster 校验——超射程 / 伤害 0 / 每秒 30 次限流', () => {
@@ -384,4 +391,45 @@ test('HTTP：蓝装 Roll 整图结算；挂机 60 秒玩家收不到 Roll 弹窗
   await actions(srv.base, ME_A.playerId, 'leaveWorld', { playerId: ME_A.playerId, worldKey: '19:0' });
   await actions(srv.base, ME_B.playerId, 'leaveWorld', { playerId: ME_B.playerId, worldKey: '19:0' });
   await actions(srv.base, ME_C.playerId, 'leaveWorld', { playerId: ME_C.playerId, worldKey: '19:0' });
+});
+
+test('HTTP：进图/传送不刷怪——杀掉的离图再回来还死着；三次进出只减不增；sync 带 nextWaveAt', async () => {
+  // 用未动过的 1:0 世界（新手村），避免前面测试的击杀干扰计数
+  const jA = await actions(srv.base, ME_A.playerId, 'joinWorld', { ...ME_A, worldKey: '1:0', x: 0, y: 0 });
+  assert.equal(jA.ok, true);
+  assert.ok(jA.nextWaveAt > Date.now(), 'sync 应带下次整波时间 nextWaveAt');
+  assert.equal(new Date(jA.nextWaveAt).getMinutes(), 0, 'nextWaveAt 应在整点 :00');
+  const fullCount = jA.monsters.length;
+  assert.ok(fullCount > 50, '新手村进图应有满图怪，实际 ' + fullCount + ' 只');
+
+  // 连续进出三次、每次杀 1 只：活怪数只减不增
+  let prevCount = fullCount;
+  for (let round = 1; round <= 3; round++) {
+    const sync = await actions(srv.base, ME_A.playerId, 'worldSync', {
+      playerId: ME_A.playerId, worldKey: '1:0', x: 0, y: 0, knownRev: -1,
+    });
+    assert.equal(sync.monsters.length, prevCount, `第 ${round} 次进图活怪数应为 ${prevCount}，实际 ${sync.monsters.length}`);
+    assert.equal(sync.nextWaveAt, jA.nextWaveAt, '三次进出 nextWaveAt 应不变');
+    // 杀离 (0,0) 最近的一只
+    const target = sync.monsters
+      .map((m) => ({ m, d: Math.hypot(m.x, m.y) }))
+      .sort((a, b) => a.d - b.d)[0].m;
+    await actions(srv.base, ME_A.playerId, 'worldSync', {
+      playerId: ME_A.playerId, worldKey: '1:0', x: target.x, y: target.y, knownRev: -1,
+    });
+    const hit = await actions(srv.base, ME_A.playerId, 'hitMonster', {
+      playerId: ME_A.playerId, worldKey: '1:0', monsterId: target.id, dmg: target.hp,
+    });
+    assert.equal(hit.dead, true, `第 ${round} 次应击杀 1 只`);
+    // 离图再回来：杀掉的那只还死着（不在活怪里、在 removed 里），总数减 1
+    await actions(srv.base, ME_A.playerId, 'leaveWorld', { playerId: ME_A.playerId, worldKey: '1:0' });
+    const back = await actions(srv.base, ME_A.playerId, 'joinWorld', { ...ME_A, worldKey: '1:0', x: 0, y: 0 });
+    assert.equal(back.ok, true);
+    assert.equal(back.monsters.length, prevCount - 1, `第 ${round} 次回来活怪应减 1（${prevCount}→${prevCount - 1}），实际 ${back.monsters.length}`);
+    assert.ok(!back.monsters.some((m) => m.id === target.id), '杀掉的怪重进后不应复活');
+    assert.ok(back.removed.includes(target.id), '杀掉的怪应在 removed 里');
+    prevCount -= 1;
+  }
+  console.log(`进图不刷怪通过：新手村 ${fullCount} 只 → 三次进出杀 3 只剩 ${prevCount} 只，整点前不回`);
+  await actions(srv.base, ME_A.playerId, 'leaveWorld', { playerId: ME_A.playerId, worldKey: '1:0' });
 });

@@ -251,7 +251,7 @@ async function handleApi(req, res) {
       const cls = normCls(body.cls);
       if (!cls) return sendJson(res, 400, { ok: false, error: '职业不对' });
       if (store.getCharacter(deviceId, slot)) return sendJson(res, 409, { ok: false, error: '该存档位已有角色' });
-      if (store.nameTaken(deviceId, body.name.trim())) return sendJson(res, 409, { ok: false, error: '角色名已被占用' });
+      if (store.nameTaken(body.name.trim())) return sendJson(res, 409, { ok: false, error: '名字已被占用，请换一个' });
       const save = character.newCharacterSave(body.name.trim(), cls);
       const ch = store.createCharacter(deviceId, slot, save.name, cls, save);
       if (!ch) return sendJson(res, 409, { ok: false, error: '建角色失败（位被占或名字重复）' });

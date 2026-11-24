@@ -347,33 +347,33 @@ exports.STAGES = [
     },
     {
         id: 20, name: "边界村", full: "地图二 · 边界村", face: "🏘️", mine: false,
-        desc: "比奇省南边的边境小村（与银杏山谷并列的新手村）：村外田野里鸡、鹿悠闲踱步，稻草人立在田边，多钩猫在村口窜动。这片田野最凶的就是多钩猫王，击败它即算通关。",
+        desc: "比奇省南边的边境小村（与银杏山谷并列的新手村）：村外田野里鸡、鹿悠闲踱步，稻草人立在田边，多钩猫、钉耙猫在村口窜动，毒蜘蛛藏在草丛里。这片田野最凶的就是多钩猫王，击败它即算通关。",
         clearLine: "边界村守住了，村民们又能安心下地了",
         layers: [{
                 name: "边界村", label: "边界村 · 村外田野", ground: "#24301c",
-                pool: ["ji", "lu", "daocao", "duogou"],
+                pool: ["lu", "ji", "dingpa", "daocao", "duogou", "duzhu"],
                 killTarget: 120, hpMul: 0.9, dmgMul: 0.95, monsterCount: 220,
                 boss: B("多钩猫王", "🐱", 10, 2600, 76, 30, 70, 34, 180, "#8a8f98"),
             }],
     },
     {
         id: 19, name: "比奇野外", full: "地图三 · 比奇野外", face: "🌾", mine: false,
-        desc: "比奇城周边的野外：鹿与稻草人在田边，半兽人成群游荡，钉耙猫、毒蜘蛛藏在草丛里，食人花张着大口，森林雪人在林边出没。半兽勇士是这片野外最强的怪物，击败它才算把比奇城外清理干净；野外东边就是沃玛森林。",
+        desc: "比奇城周边的野外：稻草人在田边，半兽人成群游荡，钉耙猫、毒蜘蛛藏在草丛里，多钩猫在林边窜动。毒蜘蛛王是这片野外最强的怪物，击败它才算把比奇城外清理干净；野外东边就是沃玛森林。",
         clearLine: "比奇野外清理干净了，沃玛森林就在东边",
         layers: [{
                 name: "比奇野外", label: "比奇城 · 城外野外", ground: "#22301a",
-                pool: ["lu", "daocao", "banshou", "dingpa", "duzhu", "shiren", "xueren"],
+                pool: ["daocao", "banshou", "dingpa", "duzhu", "duogou"],
                 killTarget: 160, hpMul: 1.3, dmgMul: 1.1, monsterCount: 340,
-                boss: B("半兽勇士", "🪓", 25, 9000, 68, 52, 160, 40, 380, "#6d8a3e"),
+                boss: B("毒蜘蛛王", "🕷️", 25, 9000, 80, 52, 160, 40, 380, "#c9a227"),
             }],
     },
     {
         id: 2, name: "沃玛森林", full: "地图四 · 沃玛森林", face: "🌲", mine: false,
-        desc: "比奇城外的沃玛森林：半兽人、半兽战士成群结队，森林雪人盘踞林间，半兽勇士已经压阵，沃玛战士也在林边游荡。森林里有两个入口：南边的山道通往毒蛇山谷，森林深处藏着沃玛寺庙的入口——走到哪个入口，就进它相连的那张图。",
+        desc: "比奇城外的沃玛森林：半兽人、半兽战士成群结队，森林雪人盘踞林间，半兽勇士已经压阵。森林里有两个入口：南边的山道通往毒蛇山谷，森林深处藏着沃玛寺庙的入口——走到哪个入口，就进它相连的那张图。",
         clearLine: "沃玛森林杀穿了，通往毒蛇山谷的山道就在前方",
         layers: [{
                 name: "沃玛森林", label: "沃玛森林 · 林间大道", ground: "#1f3018",
-                pool: ["xueren", "banshou", "banshouzhan", "bsys", "duogou", "dingpa", "woma-zhanshi"],
+                pool: ["xueren", "banshou", "banshouzhan", "bsys"],
                 killTarget: 200, hpMul: 1.6, dmgMul: 1.25, monsterCount: 380,
                 boss: B("半兽统领", "👹", 28, 14400, 68, 64, 220, 42, 520, "#7d9b4e"),
             }],
@@ -1200,6 +1200,8 @@ exports.BOSS_DROPS = {
     "半兽统领": { guaranteed: ["low"], rolls: [{ set: "low", chance: 0.4 }] },
     "多钩猫王": { guaranteed: ["low"], rolls: [{ set: "low", chance: 0.3 }], bookChance: 0.1 },
     "半兽勇士": { guaranteed: ["low"], rolls: [{ set: "low", chance: 0.35 }] },
+    // 毒蜘蛛王（2026-11-24 接替半兽勇士成为比奇野外 Boss）：与原 Boss 同档掉落（必掉低级、常出低级）
+    "毒蜘蛛王": { guaranteed: ["low"], rolls: [{ set: "low", chance: 0.35 }] },
     "角蝇王": { guaranteed: ["mid"], rolls: [{ set: "mid", chance: 0.4 }, { set: "woma", chance: 0.08 }], bookChance: 0.15 },
     "毒蛇王": { guaranteed: ["low"], rolls: [{ set: "low", chance: 0.4 }] },
     // 骷髅战将王（骷髅洞一、二层层主）：只掉中级装备，不掉沃玛——第四关里只有骷髅精灵掉沃玛
