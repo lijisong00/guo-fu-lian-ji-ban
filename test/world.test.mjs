@@ -167,6 +167,27 @@ test('引擎：盟重土城安全区零怪 + 多层地图只留最后一层有 B
   console.log('盟重土城零怪 + 多层只留末层 Boss 通过');
 });
 
+test('引擎：新手村东南角安全区零怪——普通怪与 Boss 都不刷进去，tick 把误入的怪推出去', () => {
+  const eng = createWorlds(worldData);
+  const inSafe = (x, y) => x >= 950 && x <= 1350 && y >= 950 && y <= 1350;
+  const w = eng.getOrCreate(1, 0);
+  const alive = [...w.monsters.values()].filter((m) => !m.dead);
+  assert.ok(alive.length > 0, '新手村应有怪');
+  assert.ok(alive.every((m) => !inSafe(m.x, m.y)),
+    '新手村安全区内不应有怪，实际 ' + alive.filter((m) => inSafe(m.x, m.y)).length + ' 只');
+  assert.ok(w.boss, '新手村应有 Boss');
+  assert.equal(w.boss.bossName, '钉耙猫王');
+  assert.ok(!inSafe(w.boss.x, w.boss.y), '钉耙猫王不应刷进安全区，实际 (' + Math.round(w.boss.x) + ',' + Math.round(w.boss.y) + ')');
+  // tick 围栏：把一只怪手动放进安全区中心，tick 后应被推出去
+  const now = Date.now();
+  eng.join(w, { playerId: 'u1', name: '甲', classId: 'war', level: 1, x: 0, y: 0, hp: 100, maxHp: 100 }, now);
+  const m = alive.find((mm) => !mm.boss);
+  m.x = 1150; m.y = 1150; m.aggro = false; m.targetId = null;
+  eng.tick(w, now + 1000);
+  assert.ok(!inSafe(m.x, m.y), 'tick 后误入安全区的怪应被推出去，实际 (' + Math.round(m.x) + ',' + Math.round(m.y) + ')');
+  console.log('新手村安全区通过：初始 ' + alive.length + ' 只怪零落区内，Boss 钉耙猫王在区外，tick 推出误入怪');
+});
+
 test('引擎：骷髅洞/僵尸洞 pool 删怪 + 电僵尸进二三层', () => {
   const eng = createWorlds(worldData);
   const kinds = (sid, li) => new Set([...eng.getOrCreate(sid, li).monsters.values()].filter((m) => !m.boss).map((m) => m.kind));
